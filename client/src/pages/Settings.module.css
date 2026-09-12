@@ -1,0 +1,324 @@
+.page {
+  min-height: 100dvh;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-2xl);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.iconButton {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-md);
+  color: var(--color-ink-muted);
+}
+
+.iconButton:hover {
+  color: var(--color-ink);
+  background: color-mix(in srgb, var(--color-ink) 7%, transparent);
+}
+
+.title {
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.main {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: var(--space-2xl);
+}
+
+.content {
+  display: grid;
+  gap: var(--space-lg);
+}
+
+.card {
+  display: grid;
+  gap: var(--space-md);
+  padding: var(--space-xl);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+}
+
+.sectionTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--color-ink);
+}
+
+.muted {
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--color-ink-muted);
+}
+
+.loading {
+  display: grid;
+  place-items: center;
+  padding: var(--space-lg);
+  color: var(--color-ink-subtle);
+}
+
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---------------- identity ---------------- */
+
+.identity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  font-size: 19px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--accent-gradient);
+}
+
+.name {
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.email {
+  font-size: 13.5px;
+  color: var(--color-ink-muted);
+}
+
+.tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.tag {
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--color-ink-muted);
+  background: color-mix(in srgb, var(--color-ink) 8%, transparent);
+}
+
+.tagAccent {
+  color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 15%, transparent);
+}
+
+/* ---------------- quota ---------------- */
+
+.quotaBar {
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--color-ink) 9%, transparent);
+  overflow: hidden;
+}
+
+.quotaFill {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--accent-gradient);
+  transition: width var(--duration-base) var(--ease-standard);
+}
+
+/* Turns when the allowance is gone, so the cause of a failure is visible
+   before someone reports the AI as broken. */
+.quotaFill[data-full='true'] {
+  background: var(--color-danger);
+}
+
+.quotaText {
+  font-size: 12.5px;
+  color: var(--color-ink-subtle);
+}
+
+/* ---------------- fields ---------------- */
+
+.fields {
+  display: grid;
+  gap: var(--space-md);
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+}
+
+.label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-ink-muted);
+}
+
+.input {
+  width: 100%;
+  padding: 11px 13px;
+  border-radius: var(--radius-md);
+  font-size: 15px;
+  color: var(--color-ink);
+  background: color-mix(in srgb, var(--color-ink) 5%, transparent);
+  border: 1px solid var(--color-border);
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 20%, transparent);
+}
+
+.primaryButton {
+  justify-self: start;
+  padding: 11px 20px;
+  border-radius: var(--radius-md);
+  font-size: 14.5px;
+  font-weight: 650;
+  color: #fff;
+  background: var(--accent-gradient);
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+
+.primaryButton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: color-mix(in srgb, var(--color-ink) 14%, transparent);
+}
+
+/* ---------------- devices ---------------- */
+
+.deviceList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.device {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: 11px 13px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-ink) 4%, transparent);
+  border: 1px solid transparent;
+}
+
+/* The device you are on is outlined, so it is obvious which row not to
+   sign out by mistake. */
+.device[data-current='true'] {
+  border-color: color-mix(in srgb, var(--color-positive) 40%, transparent);
+  background: color-mix(in srgb, var(--color-positive) 8%, transparent);
+}
+
+.deviceIcon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  color: var(--color-ink-muted);
+  background: color-mix(in srgb, var(--color-ink) 7%, transparent);
+}
+
+.deviceText {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+
+.deviceName {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.currentTag {
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-positive);
+  background: color-mix(in srgb, var(--color-positive) 16%, transparent);
+}
+
+.deviceMeta {
+  font-size: 12.5px;
+  color: var(--color-ink-subtle);
+}
+
+.revokeButton {
+  flex: none;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-ink-muted);
+  border: 1px solid var(--color-border);
+}
+
+.revokeButton:hover {
+  color: var(--color-danger);
+  border-color: color-mix(in srgb, var(--color-danger) 45%, transparent);
+}
+
+.dangerButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  justify-self: start;
+  margin-top: var(--space-sm);
+  padding: 10px 16px;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-danger);
+  border: 1px solid color-mix(in srgb, var(--color-danger) 40%, transparent);
+  transition: background var(--duration-fast) var(--ease-standard);
+}
+
+.dangerButton:hover {
+  background: color-mix(in srgb, var(--color-danger) 12%, transparent);
+}
+
+@media (max-width: 600px) {
+  .main {
+    padding: var(--space-lg);
+  }
+
+  .card {
+    padding: var(--space-lg);
+  }
+}

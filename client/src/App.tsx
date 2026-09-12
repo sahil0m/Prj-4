@@ -7,6 +7,7 @@ import { Dashboard } from './pages/Dashboard';
 import { DeckEditor } from './pages/DeckEditor';
 import { Presenter } from './pages/Presenter';
 import { Admin } from './pages/Admin';
+import { Settings } from './pages/Settings';
 import { Splash } from './components/Splash';
 
 /**
@@ -57,6 +58,11 @@ function Shell() {
       <Route
         path="/admin"
         element={status === 'authenticated' ? <Admin /> : <Navigate to="/signin" replace />}
+      />
+
+      <Route
+        path="/settings"
+        element={status === 'authenticated' ? <Settings /> : <Navigate to="/signin" replace />}
       />
 
       <Route path="*" element={<Navigate to="/" replace />} />

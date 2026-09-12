@@ -294,6 +294,8 @@ export const api = {
 
   aiStatus: (): Promise<{ available: boolean; providers: string[] }> => request('/ai/status'),
 
+  aiQuota: (): Promise<{ used: number; limit: number; remaining: number }> => request('/ai/quota'),
+
   generateDeck: (input: {
     topic: string;
     slideCount: number;

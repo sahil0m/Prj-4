@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { motion } from 'motion/react';
+import { Check } from 'lucide-react';
 import type { SlideResults, ResultData, CountedItem, WordTally } from '@pulse/shared';
 import styles from './Results.module.css';
 
@@ -12,7 +13,19 @@ import styles from './Results.module.css';
  * previous value rather than redrawing, which is what makes a room watch.
  */
 
-export function Results({ results }: { results: SlideResults | null }) {
+export function Results({
+  results,
+  revealCorrect = false,
+}: {
+  results: SlideResults | null;
+  /**
+   * Whether to mark the right answer.
+   *
+   * Off while a quiz is still taking answers: the correct bar standing out
+   * on the projector would tell the room what to pick.
+   */
+  revealCorrect?: boolean;
+}) {
   if (!results || results.count === 0) {
     return (
       <div className={styles.empty}>
@@ -30,7 +43,7 @@ export function Results({ results }: { results: SlideResults | null }) {
 
   switch (data.type) {
     case 'counts':
-      return <Bars items={data.items} total={results.count} />;
+      return <Bars items={data.items} total={results.count} reveal={revealCorrect} />;
     case 'words':
       return <WordCloud words={data.words} />;
     case 'texts':
@@ -58,7 +71,7 @@ export function Results({ results }: { results: SlideResults | null }) {
 /* Bars                                                                */
 /* ------------------------------------------------------------------ */
 
-function Bars({ items, total }: { items: CountedItem[]; total: number }) {
+function Bars({ items, total, reveal }: { items: CountedItem[]; total: number; reveal: boolean }) {
   // Scaled to the leader rather than to 100%, so a close race still fills
   // the screen and small differences stay visible from the back of a room.
   const peak = Math.max(...items.map((i) => i.count), 1);
@@ -66,13 +79,19 @@ function Bars({ items, total }: { items: CountedItem[]; total: number }) {
   return (
     <div className={styles.bars}>
       {items.map((item, i) => (
-        <div key={item.id} className={styles.barRow}>
+        <div
+          key={item.id}
+          className={styles.barRow}
+          // Once revealed, everything that is not the right answer recedes,
+          // so the correct one is unmistakable from the back of a room.
+          data-reveal={reveal ? (item.correct === true ? 'correct' : 'wrong') : undefined}
+        >
           <div className={styles.barLabel}>
             <span className={styles.barKey}>{String.fromCharCode(65 + i)}</span>
             <span className={styles.barText}>{item.label}</span>
-            {item.correct === true && (
+            {reveal && item.correct === true && (
               <span className={styles.correctTag} aria-label="Correct answer">
-                ✓
+                <Check size={16} strokeWidth={3} />
               </span>
             )}
           </div>
@@ -80,7 +99,7 @@ function Bars({ items, total }: { items: CountedItem[]; total: number }) {
           <div className={styles.barTrack}>
             <motion.div
               className={styles.barFill}
-              data-correct={item.correct === true}
+              data-correct={reveal && item.correct === true}
               data-series={i % 12}
               initial={{ width: 0 }}
               animate={{ width: `${String((item.count / peak) * 100)}%` }}

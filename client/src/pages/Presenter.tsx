@@ -21,6 +21,7 @@ import { definitionFor, type SlideKind } from '@pulse/shared';
 import { usePresenter } from '../lib/presenter-store';
 import { Results } from '../components/Results';
 import { Leaderboard } from '../components/Leaderboard';
+import { ReactionLayer, QuestionButton, QuestionPanel } from '../components/LiveOverlay';
 import { api, ApiError, type TextSummary } from '../lib/api';
 import { useAiAvailable } from '../components/AiPanel';
 import { toast } from 'sonner';
@@ -60,6 +61,7 @@ export function Presenter() {
   const [confirmEnd, setConfirmEnd] = useState(false);
   const [summary, setSummary] = useState<{ data: TextSummary; slideId: string } | null>(null);
   const [summarising, setSummarising] = useState(false);
+  const [questionsOpen, setQuestionsOpen] = useState(false);
 
   const aiAvailable = useAiAvailable();
 
@@ -151,6 +153,7 @@ export function Presenter() {
   // Decides which export the button offers: standings for a quiz deck, the
   // raw answers otherwise.
   const hasQuiz = slides.some((s) => definitionFor(s.kind as SlideKind).isQuiz);
+  const isQuizSlide = slide ? definitionFor(slide.kind as SlideKind).isQuiz : false;
 
   // A summary belongs to one slide. Showing it after a slide change would
   // attribute one question's themes to another.
@@ -229,6 +232,9 @@ export function Presenter() {
 
       {/* ---------------- stage ---------------- */}
       <main className={styles.stage}>
+        {/* Over the slide, but never intercepting a click. */}
+        <ReactionLayer />
+
         <AnimatePresence mode="wait">
           <motion.div
             key={slide?.id ?? 'none'}
@@ -260,7 +266,13 @@ export function Presenter() {
                   <span>{results?.count ?? 0} answers so far</span>
                 </div>
               ) : (
-                <Results results={results} />
+                <Results
+                  results={results}
+                  // A quiz only reveals which answer was right once the
+                  // presenter says so; showing it while people are still
+                  // answering would give the game away on the big screen.
+                  revealCorrect={isQuizSlide && state?.participationOpen === false}
+                />
               )}
             </div>
           </motion.div>
@@ -349,6 +361,13 @@ export function Presenter() {
             </button>
           )}
 
+          <QuestionButton
+            open={questionsOpen}
+            onToggle={() => {
+              setQuestionsOpen((current) => !current);
+            }}
+          />
+
           <button
             type="button"
             className={styles.controlButton}
@@ -384,6 +403,16 @@ export function Presenter() {
           </button>
         </div>
       </footer>
+
+      <AnimatePresence>
+        {questionsOpen && (
+          <QuestionPanel
+            onClose={() => {
+              setQuestionsOpen(false);
+            }}
+          />
+        )}
+      </AnimatePresence>
 
       {/* ---------------- end confirmation ---------------- */}
       {confirmEnd && (

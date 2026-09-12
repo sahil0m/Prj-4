@@ -160,7 +160,12 @@ export function Dashboard() {
 
                 <DropdownMenu.Separator className={styles.menuSeparator} />
 
-                <DropdownMenu.Item className={styles.menuItem}>
+                <DropdownMenu.Item
+                  className={styles.menuItem}
+                  onSelect={() => {
+                    void navigate('/settings');
+                  }}
+                >
                   <Settings size={15} />
                   Account settings
                 </DropdownMenu.Item>

@@ -16,6 +16,21 @@ import { getAccessToken, api, ApiError } from './api';
  * with a thousand responses costs one small message rather than a thousand.
  */
 
+/** A reaction floating up the screen. Never stored; purely a moment. */
+export interface FloatingReaction {
+  id: number;
+  emoji: string;
+}
+
+/** A question from the audience, waiting for the presenter. */
+export interface AudienceQuestion {
+  id: string;
+  text: string;
+  displayName: string;
+  upvotes: number;
+  answered: boolean;
+}
+
 export interface SessionSnapshot {
   title: string;
   slides: { id: string; kind: string; position: number; config: Record<string, unknown> }[];
@@ -38,6 +53,8 @@ interface PresenterStore {
   state: SessionState | null;
   results: SlideResults | null;
   leaderboard: LeaderboardEntry[];
+  reactions: FloatingReaction[];
+  questions: AudienceQuestion[];
   connected: boolean;
   loading: boolean;
   error: string | null;
@@ -49,11 +66,21 @@ interface PresenterStore {
   next: () => void;
   previous: () => void;
   setParticipation: (open: boolean) => void;
+  dismissReaction: (id: number) => void;
+  markAnswered: (id: string) => void;
   setResultsVisible: (visible: boolean) => void;
   end: () => Promise<void>;
 }
 
 let socket: Socket<ServerEvents, ClientEvents> | null = null;
+
+// A monotonic id, so two reactions in the same millisecond still get
+// distinct React keys.
+let reactionCounter = 0;
+function nextReactionId(): number {
+  reactionCounter += 1;
+  return reactionCounter;
+}
 
 export const usePresenter = create<PresenterStore>((set, get) => ({
   session: null,
@@ -61,6 +88,8 @@ export const usePresenter = create<PresenterStore>((set, get) => ({
   state: null,
   results: null,
   leaderboard: [],
+  reactions: [],
+  questions: [],
   connected: false,
   loading: false,
   error: null,
@@ -110,6 +139,37 @@ export const usePresenter = create<PresenterStore>((set, get) => ({
       set({ leaderboard: entries });
     });
 
+    socket.on('participants:count', ({ count }) => {
+      // The header counter updates as people arrive. Without this it froze
+      // at whatever the count was when the presenter connected, which made
+      // a filling room look empty.
+      set((current) =>
+        current.state ? { state: { ...current.state, participantCount: count } } : {},
+      );
+    });
+
+    socket.on('response:removed', ({ slideId }) => {
+      // A removed answer changes the tally, so the presenter's own copy is
+      // refreshed rather than left showing a count that includes it.
+      if (slideId === get().state?.currentSlideId) {
+        set({ results: null });
+      }
+    });
+
+    socket.on('reaction', ({ emoji }) => {
+      // Capped, because a room that all taps at once would otherwise put a
+      // thousand animating elements on the screen at the same moment.
+      set((current) => ({
+        reactions: [...current.reactions.slice(-24), { id: nextReactionId(), emoji }],
+      }));
+    });
+
+    socket.on('question:new', (question) => {
+      set((current) => ({
+        questions: [{ ...question, answered: false }, ...current.questions].slice(0, 100),
+      }));
+    });
+
     socket.on('session:ended', () => {
       set({ connected: false });
     });
@@ -124,6 +184,8 @@ export const usePresenter = create<PresenterStore>((set, get) => ({
       state: null,
       results: null,
       leaderboard: [],
+      reactions: [],
+      questions: [],
       connected: false,
       error: null,
     });
@@ -154,6 +216,16 @@ export const usePresenter = create<PresenterStore>((set, get) => ({
     const index = snapshot.slides.findIndex((s) => s.id === state.currentSlideId);
     const target = snapshot.slides[index - 1];
     if (target) get().goTo(target.id);
+  },
+
+  dismissReaction(id) {
+    set((current) => ({ reactions: current.reactions.filter((r) => r.id !== id) }));
+  },
+
+  markAnswered(id) {
+    set((current) => ({
+      questions: current.questions.map((q) => (q.id === id ? { ...q, answered: true } : q)),
+    }));
   },
 
   setParticipation(open) {

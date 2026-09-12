@@ -1,0 +1,203 @@
+/* ---------------- reactions ---------------- */
+
+/*
+ * Sits over the slide, but never intercepts a click: a presenter must be
+ * able to press the controls underneath while applause is still floating.
+ */
+.reactionLayer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: var(--layer-sticky);
+}
+
+.reaction {
+  position: absolute;
+  bottom: 8%;
+  font-size: clamp(30px, 3.4vw, 54px);
+  line-height: 1;
+  /* Emoji render flat against a dark slide without a little lift. */
+  filter: drop-shadow(0 3px 10px rgba(0, 0, 0, 0.4));
+  will-change: transform, opacity;
+}
+
+/* ---------------- question button ---------------- */
+
+.questionButton {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 0 13px;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-ink-muted);
+  transition:
+    color var(--duration-fast) var(--ease-standard),
+    background var(--duration-fast) var(--ease-standard);
+}
+
+.questionButton:hover,
+.questionButton[data-active='true'] {
+  color: var(--color-ink);
+  background: color-mix(in srgb, var(--color-ink) 8%, transparent);
+}
+
+.questionLabel {
+  font-size: 13.5px;
+}
+
+/* An unanswered count, so a presenter mid-slide knows without opening it. */
+.badge {
+  display: grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  background: var(--color-accent);
+}
+
+/* ---------------- panel ---------------- */
+
+.panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: var(--layer-modal);
+  display: flex;
+  flex-direction: column;
+  width: min(420px, 100vw);
+  background: var(--color-surface-raised);
+  border-left: 1px solid var(--color-border);
+  box-shadow: var(--elevation-xl);
+}
+
+.panelHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  flex: none;
+  padding: var(--space-lg);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.panelTitle {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.panelCount {
+  display: grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--color-accent);
+}
+
+.panelClose {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  color: var(--color-ink-subtle);
+}
+
+.panelClose:hover {
+  color: var(--color-ink);
+  background: color-mix(in srgb, var(--color-ink) 8%, transparent);
+}
+
+.panelBody {
+  flex: 1;
+  overflow-y: auto;
+  display: grid;
+  gap: var(--space-sm);
+  align-content: start;
+  padding: var(--space-lg);
+}
+
+.panelEmpty {
+  padding: var(--space-2xl) 0;
+  text-align: center;
+  font-size: 14px;
+  color: var(--color-ink-subtle);
+}
+
+/* ---------------- question ---------------- */
+
+.question {
+  display: grid;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--color-ink) 5%, transparent);
+  border: 1px solid var(--color-border);
+}
+
+.questionDone {
+  opacity: 0.5;
+}
+
+.questionText {
+  font-size: 14.5px;
+  line-height: 1.45;
+  /* A long question must wrap rather than stretch the panel. */
+  overflow-wrap: anywhere;
+}
+
+.questionFoot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.questionAuthor {
+  font-size: 12.5px;
+  color: var(--color-ink-subtle);
+}
+
+.answered {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-ink-muted);
+  border: 1px solid var(--color-border);
+}
+
+.answered:hover {
+  color: var(--color-positive);
+  border-color: color-mix(in srgb, var(--color-positive) 45%, transparent);
+}
+
+.doneLabel {
+  margin-top: var(--space-md);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--color-ink-subtle);
+}
