@@ -14,7 +14,7 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "dev": "npm run theme:build && npm run dev --workspaces --if-present",
+    "dev": "npm run theme:build && concurrently -n server,client -c green,magenta -k \"npm:dev:server\" \"npm:dev:client\"",
     "build": "npm run theme:build && npm run build --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "eslint . --max-warnings 0",
@@ -23,7 +23,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "verify": "npm run format:check && npm run lint && npm run typecheck && npm test",
-    "theme:build": "npm run build -w shared && node scripts/build-theme.mjs"
+    "theme:build": "npm run build -w shared && node scripts/build-theme.mjs",
+    "dev:server": "npm run dev -w server",
+    "dev:client": "npm run dev -w client",
+    "dev:client:only": "npm run theme:build && npm run dev -w client"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
