@@ -14,11 +14,13 @@ import {
   Trash2,
   MoreVertical,
   Loader2,
+  Sparkles,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../lib/auth-store';
 import { api, ApiError, type DeckSummary } from '../lib/api';
 import { SlideIcon } from '../components/SlideIcon';
+import { AiPanel, useAiAvailable } from '../components/AiPanel';
 import { definitionFor } from '@pulse/shared';
 import styles from './Dashboard.module.css';
 
@@ -31,6 +33,8 @@ export function Dashboard() {
   const [decks, setDecks] = useState<DeckSummary[] | null>(null);
   const [listError, setListError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
+  const aiAvailable = useAiAvailable();
 
   const refresh = useCallback(async () => {
     try {
@@ -193,17 +197,34 @@ export function Dashboard() {
               <p className={styles.subtitle}>Build a deck, then present it to a room.</p>
             </div>
 
-            <button
-              type="button"
-              className={styles.primaryButton}
-              onClick={() => {
-                void createDeck();
-              }}
-              disabled={creating}
-            >
-              {creating ? <Loader2 size={17} className={styles.spin} /> : <Plus size={17} />}
-              New deck
-            </button>
+            <div className={styles.titleActions}>
+              {/* Only shown when a provider is actually configured; a dead
+                  AI button is worse than none. */}
+              {aiAvailable && (
+                <button
+                  type="button"
+                  className={styles.aiButton}
+                  onClick={() => {
+                    setAiOpen(true);
+                  }}
+                >
+                  <Sparkles size={17} />
+                  Build with AI
+                </button>
+              )}
+
+              <button
+                type="button"
+                className={styles.primaryButton}
+                onClick={() => {
+                  void createDeck();
+                }}
+                disabled={creating}
+              >
+                {creating ? <Loader2 size={17} className={styles.spin} /> : <Plus size={17} />}
+                New deck
+              </button>
+            </div>
           </div>
 
           {decks === null ? (
@@ -264,6 +285,14 @@ export function Dashboard() {
           )}
         </motion.div>
       </main>
+
+      <AiPanel
+        open={aiOpen}
+        onOpenChange={setAiOpen}
+        onDone={(id) => {
+          void navigate(`/decks/${id}`);
+        }}
+      />
     </div>
   );
 }

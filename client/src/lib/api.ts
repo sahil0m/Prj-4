@@ -288,7 +288,36 @@ export const api = {
 
   endSession: (sessionId: string): Promise<{ session: LiveSession }> =>
     request(`/sessions/${sessionId}/end`, { method: 'POST' }),
+
+  /* ---------------- ai ---------------- */
+
+  aiStatus: (): Promise<{ available: boolean; providers: string[] }> => request('/ai/status'),
+
+  generateDeck: (input: {
+    topic: string;
+    slideCount: number;
+    audience?: string;
+    style?: string;
+    deckId?: string;
+  }): Promise<DeckResponse & { provider: string }> =>
+    request('/ai/generate-deck', { method: 'POST', body: input }),
+
+  improveSlide: (
+    deckId: string,
+    slideId: string,
+  ): Promise<{ prompts: string[]; options?: string[]; provider: string }> =>
+    request('/ai/improve-slide', { method: 'POST', body: { deckId, slideId } }),
+
+  summarise: (sessionId: string, slideId: string): Promise<{ summary: TextSummary }> =>
+    request('/ai/summarise', { method: 'POST', body: { sessionId, slideId } }),
 };
+
+export interface TextSummary {
+  headline: string;
+  themes: { label: string; count: number; example?: string }[];
+  sentiment?: 'positive' | 'mixed' | 'negative' | 'neutral';
+  provider: string;
+}
 
 export interface LiveSession {
   id: string;

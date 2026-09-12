@@ -436,3 +436,34 @@
     transform: rotate(360deg);
   }
 }
+
+/* ---------------- ai ---------------- */
+
+.titleActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+/* Outlined rather than filled, so "New deck" stays the primary action and
+   AI reads as the alternative rather than the default. */
+.aiButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 18px;
+  border-radius: var(--radius-md);
+  font-size: 14.5px;
+  font-weight: 650;
+  color: var(--color-accent);
+  border: 1px solid color-mix(in srgb, var(--color-accent) 45%, transparent);
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-spring);
+}
+
+.aiButton:hover {
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+  transform: translateY(-1px);
+}

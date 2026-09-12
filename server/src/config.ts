@@ -49,6 +49,22 @@ const zEnv = z.object({
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
 
+  /**
+   * AI providers. All free tiers; the server never calls a paid endpoint.
+   *
+   * Every one is optional. With none set, the AI features report themselves
+   * as unavailable and the rest of the product is unaffected.
+   */
+  GEMINI_API_KEY: z.string().optional(),
+  GEMINI_MODEL: z.string().default('gemini-flash-lite-latest'),
+
+  GROQ_API_KEY: z.string().optional(),
+  GROQ_MODEL: z.string().default('llama-3.3-70b-versatile'),
+
+  /** Local model. Needs no key; simply fails fast when not running. */
+  OLLAMA_URL: z.string().default('http://localhost:11434'),
+  OLLAMA_MODEL: z.string().default('llama3.2'),
+
   /** Cookie domain in production. Leave unset for localhost. */
   COOKIE_DOMAIN: z.string().optional(),
 });

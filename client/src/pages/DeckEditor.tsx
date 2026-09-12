@@ -14,6 +14,7 @@ import {
   Loader2,
   AlertCircle,
   Presentation,
+  Sparkles,
 } from 'lucide-react';
 import { definitionFor, type SlideKind } from '@pulse/shared';
 import { api, ApiError } from '../lib/api';
@@ -22,6 +23,7 @@ import { useDeck, useSelectedSlide } from '../lib/deck-store';
 import { SlidePicker } from '../components/SlidePicker';
 import { SlideForm } from '../components/SlideForm';
 import { SlideIcon } from '../components/SlideIcon';
+import { AiPanel, useAiAvailable, ImproveButton } from '../components/AiPanel';
 import { Splash } from '../components/Splash';
 import styles from './DeckEditor.module.css';
 
@@ -50,6 +52,8 @@ export function DeckEditor() {
   const slide = useSelectedSlide();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
+  const aiAvailable = useAiAvailable();
 
   /**
    * Starts a live session and moves to the presenter view.
@@ -191,16 +195,32 @@ export function DeckEditor() {
             })}
           </ol>
 
-          <button
-            type="button"
-            className={styles.addSlide}
-            onClick={() => {
-              setPickerOpen(true);
-            }}
-          >
-            <Plus size={16} />
-            Add slide
-          </button>
+          <div className={styles.railActions}>
+            <button
+              type="button"
+              className={styles.addSlide}
+              onClick={() => {
+                setPickerOpen(true);
+              }}
+            >
+              <Plus size={16} />
+              Add slide
+            </button>
+
+            {aiAvailable && (
+              <button
+                type="button"
+                className={styles.aiSlideButton}
+                onClick={() => {
+                  setAiOpen(true);
+                }}
+                title="Let AI write more slides for this deck"
+              >
+                <Sparkles size={16} />
+                Add with AI
+              </button>
+            )}
+          </div>
         </aside>
 
         {/* ---------------- preview ---------------- */}
@@ -302,6 +322,30 @@ export function DeckEditor() {
                     updateSlideConfig(slide.id, patch);
                   }}
                 />
+
+                {aiAvailable && (
+                  <ImproveButton
+                    deckId={deck.id}
+                    slideId={slide.id}
+                    onPick={(prompt, options) => {
+                      updateSlideConfig(slide.id, {
+                        prompt,
+                        // Options are only applied to a slide that has them,
+                        // and the ids are regenerated so the shape matches
+                        // what the schema expects.
+                        ...(options &&
+                        Array.isArray((slide.config as { options?: unknown }).options)
+                          ? {
+                              options: options.map((label, i) => ({
+                                id: `o${String(i + 1)}`,
+                                label,
+                              })),
+                            }
+                          : {}),
+                      });
+                    }}
+                  />
+                )}
               </div>
             </>
           ) : (
@@ -315,6 +359,16 @@ export function DeckEditor() {
         onOpenChange={setPickerOpen}
         onPick={(kind: SlideKind) => {
           void addSlide(kind, selectedId ?? undefined);
+        }}
+      />
+
+      <AiPanel
+        open={aiOpen}
+        onOpenChange={setAiOpen}
+        deckId={deck.id}
+        onDone={() => {
+          // Reload so the new slides appear in the rail immediately.
+          if (deckId) void load(deckId);
         }}
       />
     </div>

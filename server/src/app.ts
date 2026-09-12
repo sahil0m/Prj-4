@@ -6,10 +6,12 @@ import rateLimit from 'express-rate-limit';
 import { ZodError } from 'zod';
 import { allowedOrigins, isProduction } from './config.js';
 import { logger } from './lib/logger.js';
+import { AiError } from './services/ai/providers.js';
 import { pingDb } from './lib/db.js';
 import { authRoutes } from './routes/auth.js';
 import { deckRoutes } from './routes/decks.js';
 import { sessionRoutes } from './routes/sessions.js';
+import { aiRoutes } from './routes/ai.js';
 
 /**
  * Builds the Express application.
@@ -111,6 +113,7 @@ export function createApp(): Express {
   app.use('/api/auth', authRoutes());
   app.use('/api/decks', deckRoutes());
   app.use('/api/sessions', sessionRoutes());
+  app.use('/api/ai', aiRoutes());
 
   /* ---------------- 404 ---------------- */
 
@@ -133,6 +136,14 @@ export function createApp(): Express {
 
     if (err instanceof HttpError) {
       res.status(err.status).json({ error: err.message, code: err.code });
+      return;
+    }
+
+    // An AI failure is an upstream problem, not a bug here, and its message
+    // is already written for a person to read — "every provider is busy" is
+    // far more useful than "something went wrong on our side".
+    if (err instanceof AiError) {
+      res.status(503).json({ error: err.message, code: err.code });
       return;
     }
 
