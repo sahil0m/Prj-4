@@ -4,6 +4,7 @@ export * from './slides/configs.js';
 export * from './slides/answers.js';
 export * from './slides/registry.js';
 export * from './slides/readiness.js';
+export * from './slides/fields.js';
 export * from './theme/tokens.js';
 export * from './theme/contrast.js';
 export * from './theme/stylesheet.js';

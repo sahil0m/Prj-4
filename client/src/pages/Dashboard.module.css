@@ -301,3 +301,138 @@
     justify-content: center;
   }
 }
+
+/* ---------------- deck grid ---------------- */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(268px, 1fr));
+  gap: var(--space-lg);
+}
+
+.cardSkeleton {
+  height: 168px;
+  border-radius: var(--radius-lg);
+}
+
+.card {
+  position: relative;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-spring),
+    box-shadow var(--duration-fast) var(--ease-standard);
+}
+
+.card:hover {
+  border-color: color-mix(in srgb, var(--color-accent) 50%, transparent);
+  transform: translateY(-2px);
+  box-shadow: var(--elevation-lg);
+}
+
+.cardOpen {
+  display: grid;
+  gap: 5px;
+  width: 100%;
+  padding: var(--space-lg);
+  text-align: left;
+  border-radius: inherit;
+}
+
+.cardPreview {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 78px;
+  margin-bottom: var(--space-sm);
+  padding: 0 var(--space-md);
+  border-radius: var(--radius-md);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--color-accent) 18%, transparent),
+    color-mix(in srgb, var(--color-accent) 5%, transparent)
+  );
+}
+
+.cardChip {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-canvas) 70%, transparent);
+}
+
+.cardEmptyMark {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  color: var(--color-ink-subtle);
+  background: color-mix(in srgb, var(--color-canvas) 60%, transparent);
+}
+
+.cardTitle {
+  font-size: 14.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  /* Long titles must not push the card wider than its grid track. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-right: 26px;
+}
+
+.cardMeta {
+  font-size: 12.5px;
+  color: var(--color-ink-subtle);
+}
+
+.cardMenuButton {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  color: var(--color-ink-muted);
+  background: color-mix(in srgb, var(--color-canvas) 55%, transparent);
+  opacity: 0;
+  transition:
+    opacity var(--duration-fast) var(--ease-standard),
+    background var(--duration-fast) var(--ease-standard);
+}
+
+.card:hover .cardMenuButton,
+.cardMenuButton:focus-visible,
+.cardMenuButton[data-state='open'] {
+  opacity: 1;
+}
+
+.cardMenuButton:hover {
+  color: var(--color-ink);
+  background: color-mix(in srgb, var(--color-ink) 12%, transparent);
+}
+
+/* Touch devices have no hover, so the menu must always be reachable. */
+@media (hover: none) {
+  .cardMenuButton {
+    opacity: 1;
+  }
+}
+
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

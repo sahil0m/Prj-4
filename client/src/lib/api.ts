@@ -1,3 +1,5 @@
+import type { SlideKind, SlideConfig } from '@pulse/shared';
+
 /**
  * The API client.
  *
@@ -212,7 +214,110 @@ export const api = {
   startGoogleSignIn(): void {
     window.location.href = `${BASE}/auth/google`;
   },
+
+  /* ---------------- decks ---------------- */
+
+  listDecks: (
+    options: { includeArchived?: boolean; search?: string } = {},
+  ): Promise<{
+    decks: DeckSummary[];
+  }> => {
+    const params = new URLSearchParams();
+    if (options.includeArchived) params.set('includeArchived', 'true');
+    if (options.search) params.set('search', options.search);
+    const query = params.toString();
+    return request(`/decks${query ? `?${query}` : ''}`);
+  },
+
+  createDeck: (input: { title?: string; slideKinds?: SlideKind[] } = {}): Promise<DeckResponse> =>
+    request('/decks', { method: 'POST', body: input }),
+
+  getDeck: (deckId: string): Promise<DeckResponse> => request(`/decks/${deckId}`),
+
+  updateDeck: (deckId: string, input: UpdateDeckInput): Promise<DeckResponse> =>
+    request(`/decks/${deckId}`, { method: 'PATCH', body: input }),
+
+  deleteDeck: (deckId: string): Promise<void> => request(`/decks/${deckId}`, { method: 'DELETE' }),
+
+  duplicateDeck: (deckId: string): Promise<DeckResponse> =>
+    request(`/decks/${deckId}/duplicate`, { method: 'POST' }),
+
+  archiveDeck: (deckId: string, archived: boolean): Promise<DeckResponse> =>
+    request(`/decks/${deckId}/archive`, { method: 'POST', body: { archived } }),
+
+  addSlide: (
+    deckId: string,
+    input: { kind: SlideKind; afterSlideId?: string; config?: unknown },
+  ): Promise<DeckResponse & { slideId: string }> =>
+    request(`/decks/${deckId}/slides`, { method: 'POST', body: input }),
+
+  /**
+   * Sends only the fields that changed; the server merges them over the
+   * stored config, so one panel's save cannot wipe another's fields.
+   */
+  updateSlide: (
+    deckId: string,
+    slideId: string,
+    patch: Record<string, unknown>,
+  ): Promise<DeckResponse> =>
+    request(`/decks/${deckId}/slides/${slideId}`, { method: 'PUT', body: patch }),
+
+  deleteSlide: (deckId: string, slideId: string): Promise<DeckResponse> =>
+    request(`/decks/${deckId}/slides/${slideId}`, { method: 'DELETE' }),
+
+  duplicateSlide: (deckId: string, slideId: string): Promise<DeckResponse & { slideId: string }> =>
+    request(`/decks/${deckId}/slides/${slideId}/duplicate`, { method: 'POST' }),
+
+  moveSlide: (deckId: string, slideId: string, toIndex: number): Promise<DeckResponse> =>
+    request(`/decks/${deckId}/slides/${slideId}/move`, { method: 'POST', body: { toIndex } }),
 };
+
+/* ------------------------------------------------------------------ */
+/* Deck shapes                                                         */
+/* ------------------------------------------------------------------ */
+
+export interface DeckSummary {
+  id: string;
+  title: string;
+  description: string;
+  slideCount: number;
+  preview: SlideKind[];
+  theme: { preset: string; accent: string; mode: 'dark' | 'light' };
+  archived: boolean;
+  updatedAt: string;
+  createdAt: string;
+}
+
+export interface Slide {
+  id: string;
+  kind: SlideKind;
+  position: number;
+  config: SlideConfig;
+}
+
+export interface Deck {
+  id: string;
+  title: string;
+  description: string;
+  slides: Slide[];
+  theme: Record<string, unknown>;
+  settings: Record<string, unknown>;
+  revision: number;
+  archived: boolean;
+  updatedAt: string;
+  createdAt: string;
+}
+
+export interface DeckResponse {
+  deck: Deck;
+}
+
+export interface UpdateDeckInput {
+  title?: string;
+  description?: string;
+  theme?: Record<string, unknown>;
+  settings?: Record<string, unknown>;
+}
 
 export interface ActiveSession {
   id: string;

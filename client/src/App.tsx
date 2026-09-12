@@ -4,6 +4,7 @@ import { Toaster } from 'sonner';
 import { useAuth } from './lib/auth-store';
 import { SignIn } from './pages/SignIn';
 import { Dashboard } from './pages/Dashboard';
+import { DeckEditor } from './pages/DeckEditor';
 import { Splash } from './components/Splash';
 
 /**
@@ -37,6 +38,11 @@ function Shell() {
       <Route
         path="/"
         element={status === 'authenticated' ? <Dashboard /> : <Navigate to="/signin" replace />}
+      />
+
+      <Route
+        path="/decks/:deckId"
+        element={status === 'authenticated' ? <DeckEditor /> : <Navigate to="/signin" replace />}
       />
 
       <Route path="*" element={<Navigate to="/" replace />} />
