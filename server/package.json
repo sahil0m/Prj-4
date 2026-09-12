@@ -12,7 +12,8 @@
     "db:ping": "tsx src/scripts/ping.ts",
     "db:verify": "tsx src/scripts/verify-models.ts",
     "auth:verify": "tsx src/scripts/verify-auth.ts",
-    "decks:verify": "tsx src/scripts/verify-decks.ts"
+    "decks:verify": "tsx src/scripts/verify-decks.ts",
+    "realtime:verify": "tsx src/scripts/verify-realtime.ts"
   },
   "dependencies": {
     "@pulse/shared": "*",

@@ -3,6 +3,7 @@ import { env } from './config.js';
 import { logger } from './lib/logger.js';
 import { connectDb, disconnectDb } from './lib/db.js';
 import { createApp } from './app.js';
+import { attachRealtime } from './realtime/gateway.js';
 
 /**
  * Process entry point.
@@ -23,6 +24,10 @@ async function main(): Promise<void> {
 
   const app = createApp();
   const server = createServer(app);
+
+  // Attached before the port opens, so a client that connects the instant
+  // the server is up finds the socket handler already listening.
+  const io = attachRealtime(server);
 
   // Slightly above a typical 60s load-balancer idle timeout, so the balancer
   // closes idle connections rather than the app racing it.
@@ -54,6 +59,10 @@ async function main(): Promise<void> {
       process.exit(1);
     }, 15_000);
     forceExit.unref();
+
+    // Sockets first: a phone told the session is closing can show that,
+    // where a socket killed with the process just looks like a crash.
+    void io.close();
 
     server.close(() => {
       void disconnectDb()

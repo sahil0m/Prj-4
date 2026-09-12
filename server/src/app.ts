@@ -9,6 +9,7 @@ import { logger } from './lib/logger.js';
 import { pingDb } from './lib/db.js';
 import { authRoutes } from './routes/auth.js';
 import { deckRoutes } from './routes/decks.js';
+import { sessionRoutes } from './routes/sessions.js';
 
 /**
  * Builds the Express application.
@@ -109,6 +110,7 @@ export function createApp(): Express {
 
   app.use('/api/auth', authRoutes());
   app.use('/api/decks', deckRoutes());
+  app.use('/api/sessions', sessionRoutes());
 
   /* ---------------- 404 ---------------- */
 
