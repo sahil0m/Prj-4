@@ -238,5 +238,8 @@ export type JoinResult =
       /** Echoed back so a phone that was given a name keeps showing it. */
       displayName: string;
       collectNames: boolean;
+      /** What the deck allows, so a phone hides what it cannot use. */
+      allowReactions: boolean;
+      allowQuestions: boolean;
     }
   | { ok: false; code: string; message: string };

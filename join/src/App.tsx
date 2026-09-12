@@ -48,6 +48,10 @@ export function App() {
   // quiz result arriving is the signal that this deck has one.
   const [hasScores, setHasScores] = useState(false);
 
+  // What this deck allows. Buttons for a disabled feature are hidden rather
+  // than shown and refused, which would look like a fault.
+  const [allow, setAllow] = useState({ reactions: true, questions: false });
+
   const connection = useRef<SessionConnection | null>(null);
 
   // When this device first saw the current slide. The server measures
@@ -118,6 +122,7 @@ export function App() {
     setState(result.session);
     showSlide(result.slide);
     setCollectNames(result.collectNames);
+    setAllow({ reactions: result.allowReactions, questions: result.allowQuestions });
 
     // Ask for a name only when the deck wants one and we do not have it yet.
     if (result.collectNames && result.displayName === '' && displayName === undefined) {
@@ -255,7 +260,14 @@ export function App() {
         <footer className={styles.footer}>Answering as {name}</footer>
       )}
 
-      {connection.current && <ActionBar connection={connection.current} showScores={hasScores} />}
+      {connection.current && (
+        <ActionBar
+          connection={connection.current}
+          showScores={hasScores}
+          showReactions={allow.reactions}
+          showQuestions={allow.questions}
+        />
+      )}
     </div>
   );
 }

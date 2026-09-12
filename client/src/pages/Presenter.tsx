@@ -16,6 +16,8 @@ import {
   Download,
   Sparkles,
   Loader2,
+  Eye as EyeIcon,
+  CheckCircle2,
 } from 'lucide-react';
 import { definitionFor, type SlideKind } from '@pulse/shared';
 import { usePresenter } from '../lib/presenter-store';
@@ -62,6 +64,19 @@ export function Presenter() {
   const [summary, setSummary] = useState<{ data: TextSummary; slideId: string } | null>(null);
   const [summarising, setSummarising] = useState(false);
   const [questionsOpen, setQuestionsOpen] = useState(false);
+
+  /**
+   * Which quiz slides have had their answer revealed.
+   *
+   * Revealing is its own decision, separate from closing the vote: a
+   * presenter may close early and keep the room guessing, or reveal while
+   * stragglers are still answering. Tying the two together meant the right
+   * answer was only ever visible by accident.
+   *
+   * Held per slide, so going back to a revealed question does not hide it
+   * again, and moving forward does not give the next one away.
+   */
+  const [revealed, setRevealed] = useState<Set<string>>(new Set());
 
   const aiAvailable = useAiAvailable();
 
@@ -288,7 +303,7 @@ export function Presenter() {
                   // A quiz only reveals which answer was right once the
                   // presenter says so; showing it while people are still
                   // answering would give the game away on the big screen.
-                  revealCorrect={isQuizSlide && state?.participationOpen === false}
+                  revealCorrect={isQuizSlide && slide !== undefined && revealed.has(slide.id)}
                 />
               )}
             </div>
@@ -325,6 +340,30 @@ export function Presenter() {
         </div>
 
         <div className={styles.controlGroup}>
+          {/* Its own control, because revealing and closing the vote are
+              different decisions a presenter makes at different moments. */}
+          {isQuizSlide && slide && (
+            <button
+              type="button"
+              className={styles.controlButton}
+              data-active={revealed.has(slide.id)}
+              onClick={() => {
+                setRevealed((current) => {
+                  const next = new Set(current);
+                  if (next.has(slide.id)) next.delete(slide.id);
+                  else next.add(slide.id);
+                  return next;
+                });
+              }}
+              title={revealed.has(slide.id) ? 'Hide the answer' : 'Show the correct answer'}
+            >
+              {revealed.has(slide.id) ? <CheckCircle2 size={18} /> : <EyeIcon size={18} />}
+              <span className={styles.controlLabel}>
+                {revealed.has(slide.id) ? 'Revealed' : 'Reveal answer'}
+              </span>
+            </button>
+          )}
+
           {answerable && (
             <>
               <button

@@ -25,12 +25,19 @@ const REACTIONS: { emoji: 'clap' | 'heart' | 'laugh' | 'wow' | 'thumbsUp'; glyph
 export function ActionBar({
   connection,
   showScores,
+  showReactions,
+  showQuestions,
 }: {
   connection: SessionConnection;
   /** Only shown for a quiz deck; a scoreboard with no scores is noise. */
   showScores: boolean;
+  showReactions: boolean;
+  showQuestions: boolean;
 }) {
   const [panel, setPanel] = useState<Panel>('none');
+
+  // With everything turned off the bar itself is just a strip of nothing.
+  if (!showScores && !showReactions && !showQuestions) return null;
 
   const toggle = (next: Panel) => {
     setPanel((current) => (current === next ? 'none' : next));
@@ -66,33 +73,37 @@ export function ActionBar({
       )}
 
       <nav className={styles.bar}>
-        <button
-          type="button"
-          className={styles.action}
-          data-active={panel === 'reactions'}
-          onClick={() => {
-            toggle('reactions');
-          }}
-        >
-          <span className={styles.actionGlyph} aria-hidden="true">
-            👏
-          </span>
-          React
-        </button>
+        {showReactions && (
+          <button
+            type="button"
+            className={styles.action}
+            data-active={panel === 'reactions'}
+            onClick={() => {
+              toggle('reactions');
+            }}
+          >
+            <span className={styles.actionGlyph} aria-hidden="true">
+              👏
+            </span>
+            React
+          </button>
+        )}
 
-        <button
-          type="button"
-          className={styles.action}
-          data-active={panel === 'question'}
-          onClick={() => {
-            toggle('question');
-          }}
-        >
-          <span className={styles.actionGlyph} aria-hidden="true">
-            ✋
-          </span>
-          Ask
-        </button>
+        {showQuestions && (
+          <button
+            type="button"
+            className={styles.action}
+            data-active={panel === 'question'}
+            onClick={() => {
+              toggle('question');
+            }}
+          >
+            <span className={styles.actionGlyph} aria-hidden="true">
+              ✋
+            </span>
+            Ask
+          </button>
+        )}
 
         {showScores && (
           <button

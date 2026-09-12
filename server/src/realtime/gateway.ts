@@ -7,6 +7,7 @@ import { verifyAccessToken } from '../lib/tokens.js';
 import { Session, User, AudienceQuestion, Response } from '../models/index.js';
 import { HttpError } from '../app.js';
 import * as sessions from '../services/sessions.js';
+import { isProfane } from '../services/profanity.js';
 import {
   definitionFor,
   room,
@@ -153,6 +154,8 @@ export function attachRealtime(
             slide,
             displayName: participant.displayName,
             collectNames: sessions.collectsNames(session),
+            allowReactions: sessions.allowsReactions(session),
+            allowQuestions: sessions.allowsQuestions(session),
           };
           ack(result);
 
@@ -260,6 +263,32 @@ export function attachRealtime(
           }
 
           const input = zAskQuestion.parse(raw);
+
+          const questionSession = await Session.findById(sessionId);
+          if (!questionSession) {
+            ack({ ok: false, code: 'session_not_found', message: 'That session has ended.' });
+            return;
+          }
+
+          // Enforced here rather than only by hiding the button: a phone can
+          // emit whatever event it likes.
+          if (!sessions.allowsQuestions(questionSession)) {
+            ack({
+              ok: false,
+              code: 'questions_disabled',
+              message: 'The presenter has turned questions off.',
+            });
+            return;
+          }
+
+          if (isProfane(input.text)) {
+            ack({
+              ok: false,
+              code: 'profanity_blocked',
+              message: 'That question contains a word the presenter has blocked.',
+            });
+            return;
+          }
           const participant = await loadParticipant(participantId);
 
           const question = await AudienceQuestion.create({
@@ -324,11 +353,18 @@ export function attachRealtime(
       const parsed = zReaction.safeParse(raw);
       if (!parsed.success) return;
 
-      // Ephemeral by design: never stored, just shown. Sent to the room as
-      // well as the presenter, so a phone can show that others reacted too.
-      io.to(room.presenters(sessionId))
-        .to(room.participants(sessionId))
-        .emit('reaction', { emoji: parsed.data.emoji });
+      void (async () => {
+        // Checked on the server as well as hidden in the interface: a phone
+        // can emit whatever event it likes.
+        const reactionSession = await Session.findById(sessionId);
+        if (!reactionSession || !sessions.allowsReactions(reactionSession)) return;
+
+        // Ephemeral by design: never stored, just shown. Sent to the room as
+        // well as the presenter, so a phone can show that others reacted too.
+        io.to(room.presenters(sessionId))
+          .to(room.participants(sessionId))
+          .emit('reaction', { emoji: parsed.data.emoji });
+      })();
     });
 
     /* ---------------- presenters ---------------- */

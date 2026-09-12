@@ -10,6 +10,7 @@ import {
 } from '../models/index.js';
 import { HttpError } from '../app.js';
 import { logger } from '../lib/logger.js';
+import { isProfane } from './profanity.js';
 import {
   aggregate,
   definitionFor,
@@ -204,6 +205,40 @@ export function snapshotOf(session: SessionDoc): Snapshot {
 }
 
 /**
+ * Whatever text an answer carries, for the profanity check.
+ *
+ * Only the kinds someone types into. A choice answer carries option ids the
+ * author wrote, and running those through a filter would be pointless.
+ */
+function textOf(payload: unknown): string {
+  const data = payload as { text?: unknown; words?: unknown; fields?: unknown };
+
+  if (typeof data.text === 'string') return data.text;
+
+  if (Array.isArray(data.words)) {
+    return data.words.filter((word): word is string => typeof word === 'string').join(' ');
+  }
+
+  if (data.fields && typeof data.fields === 'object') {
+    return Object.values(data.fields as Record<string, unknown>)
+      .filter((value): value is string => typeof value === 'string')
+      .join(' ');
+  }
+
+  return '';
+}
+
+/** Whether reactions are allowed. On unless the author turned them off. */
+export function allowsReactions(session: SessionDoc): boolean {
+  return snapshotOf(session).settings?.reactions !== false;
+}
+
+/** Whether the audience may send questions. Off unless the author asked. */
+export function allowsQuestions(session: SessionDoc): boolean {
+  return snapshotOf(session).settings?.chat === true;
+}
+
+/**
  * Whether this session should ask people for a name.
  *
  * Derived from the deck rather than read from a setting alone. A quiz
@@ -322,6 +357,21 @@ export async function recordAnswer(
       issue ? `${issue.path.join('.')}: ${issue.message}` : 'That answer was not valid.',
       'invalid_answer',
     );
+  }
+
+  // Checked before anything is stored, so a blocked word never reaches the
+  // database and cannot appear even for the instant before a presenter
+  // removes it by hand.
+  if (snapshotOf(session).settings?.profanityFilter !== false) {
+    const text = textOf(parsed.data);
+
+    if (text !== '' && isProfane(text)) {
+      throw new HttpError(
+        422,
+        'That answer contains a word the presenter has blocked.',
+        'profanity_blocked',
+      );
+    }
   }
 
   const oneAnswerOnly = snapshotOf(session).settings?.oneAnswerPerDevice !== false;
