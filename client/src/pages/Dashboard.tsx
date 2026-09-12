@@ -16,6 +16,7 @@ import {
   Loader2,
   Sparkles,
   Shield,
+  History as HistoryIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../lib/auth-store';
@@ -230,6 +231,18 @@ export function Dashboard() {
                   Build with AI
                 </button>
               )}
+
+              <button
+                type="button"
+                className={styles.aiButton}
+                onClick={() => {
+                  void navigate('/history');
+                }}
+                title="Past sessions and their results"
+              >
+                <HistoryIcon size={17} />
+                Past sessions
+              </button>
 
               <button
                 type="button"

@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import type { SlideKind } from '@pulse/shared';
+import { PinInput, MapInput, GridInput, DrawingInput } from './SpatialInput';
+import { QuickFormInput, MatchInput } from './FormInput';
 import styles from './AnswerInput.module.css';
 
 /**
@@ -73,6 +75,24 @@ export function AnswerInput(props: AnswerInputProps) {
 
     case 'points_100':
       return <PointsInput {...props} />;
+
+    case 'pin_image':
+      return <PinInput {...props} />;
+
+    case 'map_pin':
+      return <MapInput {...props} />;
+
+    case 'grid_2x2':
+      return <GridInput {...props} />;
+
+    case 'drawing':
+      return <DrawingInput {...props} />;
+
+    case 'quick_form':
+      return <QuickFormInput {...props} />;
+
+    case 'quiz_match':
+      return <MatchInput {...props} />;
 
     default:
       return <p className={styles.watchOnly}>Nothing to answer here — look at the screen.</p>;

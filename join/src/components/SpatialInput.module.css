@@ -1,0 +1,285 @@
+/*
+ * Surfaces you touch rather than controls you press.
+ *
+ * Every one sets touch-action: none in the component, so a tap is an answer
+ * rather than the start of a scroll.
+ */
+
+.stack {
+  display: grid;
+  gap: var(--space-md);
+}
+
+.hint {
+  font-size: 13.5px;
+  text-align: center;
+  color: var(--color-ink-subtle);
+}
+
+.missing {
+  padding: var(--space-2xl) var(--space-lg);
+  text-align: center;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--color-ink-muted);
+}
+
+/* ---------------- shared surface ---------------- */
+
+.surface {
+  position: relative;
+  width: 100%;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: color-mix(in srgb, var(--color-ink) 6%, transparent);
+  border: 2px solid var(--color-border);
+  /* Stops iOS showing a grey flash over the whole surface on tap. */
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+.image {
+  display: block;
+  width: 100%;
+  height: auto;
+  pointer-events: none;
+}
+
+.pin {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--color-accent);
+  border: 3px solid var(--color-canvas);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  animation: drop 0.25s var(--ease-spring);
+}
+
+@keyframes drop {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -140%) scale(0.5);
+  }
+}
+
+.submit {
+  width: 100%;
+  min-height: 54px;
+  border-radius: var(--radius-lg);
+  font-size: 17px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--accent-gradient);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.submit:disabled {
+  opacity: 0.4;
+  background: color-mix(in srgb, var(--color-ink) 14%, transparent);
+}
+
+/* ---------------- map ---------------- */
+
+.mapSurface {
+  aspect-ratio: 2 / 1;
+}
+
+.map {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.ocean {
+  fill: color-mix(in srgb, var(--color-accent) 12%, transparent);
+}
+
+.land {
+  fill: color-mix(in srgb, var(--color-ink) 30%, transparent);
+  stroke: color-mix(in srgb, var(--color-ink) 45%, transparent);
+  stroke-width: 0.5;
+}
+
+/* ---------------- grid ---------------- */
+
+.gridPrompt {
+  font-size: 15px;
+  font-weight: 650;
+  text-align: center;
+}
+
+/* Padded so the axis labels sit outside the plotting area rather than over
+   the dots someone has placed. */
+.gridWrap {
+  position: relative;
+  padding: 22px 42px;
+}
+
+.gridSurface {
+  aspect-ratio: 1;
+}
+
+.axis {
+  position: absolute;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-ink-subtle);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.axisTop {
+  top: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.axisBottom {
+  bottom: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.axisLeft {
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%) rotate(-90deg);
+  transform-origin: center;
+}
+
+.axisRight {
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%) rotate(90deg);
+  transform-origin: center;
+}
+
+.gridLineV,
+.gridLineH {
+  position: absolute;
+  background: color-mix(in srgb, var(--color-ink) 18%, transparent);
+  pointer-events: none;
+}
+
+.gridLineV {
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+}
+
+.gridLineH {
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 1px;
+}
+
+.gridDot {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  padding: 4px 8px;
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 650;
+  white-space: nowrap;
+  color: var(--color-canvas);
+  background: color-mix(in srgb, var(--color-ink) 55%, transparent);
+  pointer-events: none;
+  animation: drop 0.25s var(--ease-spring);
+}
+
+/* The item being placed stands out from the ones already done. */
+.gridDot[data-active='true'] {
+  color: #fff;
+  background: var(--color-accent);
+  z-index: 1;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+}
+
+.chip {
+  padding: 7px 12px;
+  border-radius: var(--radius-pill);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-ink-muted);
+  background: color-mix(in srgb, var(--color-ink) 7%, transparent);
+  border: 1.5px solid transparent;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.chip[data-placed='true'] {
+  color: var(--color-positive);
+  background: color-mix(in srgb, var(--color-positive) 12%, transparent);
+}
+
+.chip[data-active='true'] {
+  border-color: var(--color-accent);
+  color: var(--color-ink);
+}
+
+/* ---------------- drawing ---------------- */
+
+.drawSurface {
+  aspect-ratio: 4 / 3;
+  /* A lighter ground, so strokes in any of the palette colours are visible. */
+  background: color-mix(in srgb, var(--color-ink) 10%, transparent);
+  cursor: crosshair;
+}
+
+.ink {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.colors {
+  display: flex;
+  gap: 8px;
+}
+
+.colorDot {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 3px solid transparent;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.1s var(--ease-spring);
+}
+
+.colorDot[data-active='true'] {
+  border-color: var(--color-ink);
+  transform: scale(1.12);
+}
+
+.undo {
+  padding: 9px 14px;
+  border-radius: var(--radius-md);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-ink-muted);
+  border: 1px solid var(--color-border);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.undo:disabled {
+  opacity: 0.35;
+}

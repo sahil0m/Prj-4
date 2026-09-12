@@ -8,6 +8,7 @@ import { DeckEditor } from './pages/DeckEditor';
 import { Presenter } from './pages/Presenter';
 import { Admin } from './pages/Admin';
 import { Settings } from './pages/Settings';
+import { History } from './pages/History';
 import { Splash } from './components/Splash';
 
 /**
@@ -63,6 +64,11 @@ function Shell() {
       <Route
         path="/settings"
         element={status === 'authenticated' ? <Settings /> : <Navigate to="/signin" replace />}
+      />
+
+      <Route
+        path="/history"
+        element={status === 'authenticated' ? <History /> : <Navigate to="/signin" replace />}
       />
 
       <Route path="*" element={<Navigate to="/" replace />} />

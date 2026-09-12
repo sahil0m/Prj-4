@@ -62,6 +62,10 @@ export function Results({
       return <Scatter points={data.points} />;
     case 'pins':
       return <PinMap pins={data.pins} />;
+    case 'fields':
+      return <FormResults fields={data.fields} />;
+    case 'drawings':
+      return <DrawingWall drawings={data.drawings} />;
     default:
       return null;
   }
@@ -473,6 +477,136 @@ function PinMap({ pins }: { pins: { x: number; y: number }[] }) {
           transition={{ duration: 0.25 }}
           style={{ left: `${String(pin.x * 100)}%`, top: `${String(pin.y * 100)}%` }}
         />
+      ))}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Quick form                                                          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * One block per field.
+ *
+ * A form asks several unrelated things, so a single chart would be
+ * meaningless; each field gets whichever shape suits its own answers.
+ */
+function FormResults({
+  fields,
+}: {
+  fields: {
+    fieldId: string;
+    label: string;
+    texts: string[];
+    counts: { label: string; count: number }[];
+    average: number | null;
+    responses: number;
+  }[];
+}) {
+  return (
+    <div className={styles.formResults}>
+      {fields.map((field) => (
+        <section key={field.fieldId} className={styles.formField}>
+          <h3 className={styles.formLabel}>
+            {field.label}
+            <span className={styles.formCount}>{field.responses}</span>
+          </h3>
+
+          {field.average !== null && <p className={styles.formAverage}>{field.average}</p>}
+
+          {field.counts.length > 0 && (
+            <div className={styles.formBars}>
+              {field.counts.map((entry, i) => {
+                const peak = Math.max(...field.counts.map((c) => c.count), 1);
+                return (
+                  <div key={entry.label} className={styles.formBarRow}>
+                    <span className={styles.formBarLabel}>{entry.label}</span>
+                    <div className={styles.formBarTrack}>
+                      <motion.div
+                        className={styles.formBarFill}
+                        data-series={i % 12}
+                        initial={{ width: 0 }}
+                        animate={{ width: `${String((entry.count / peak) * 100)}%` }}
+                        transition={{ type: 'spring', stiffness: 120, damping: 20 }}
+                      />
+                    </div>
+                    <span className={styles.formBarValue}>{entry.count}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {field.texts.length > 0 && (
+            <ul className={styles.formTexts}>
+              {field.texts.slice(0, 8).map((text, i) => (
+                <li key={i}>{text}</li>
+              ))}
+              {field.texts.length > 8 && (
+                <li className={styles.formMore}>and {field.texts.length - 8} more</li>
+              )}
+            </ul>
+          )}
+
+          {field.responses === 0 && <p className={styles.formEmpty}>No answers yet</p>}
+        </section>
+      ))}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Drawings                                                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Everyone's drawings, side by side.
+ *
+ * Redrawn from the stored paths rather than from images: the answers were
+ * sent as coordinates, so they scale to any screen without blurring and a
+ * wall of thirty costs a few kilobytes rather than a few megabytes.
+ */
+function DrawingWall({
+  drawings,
+}: {
+  drawings: { id: string; strokes: { color: string; width: number; points: number[] }[] }[];
+}) {
+  const toPath = (points: number[]): string => {
+    const parts: string[] = [];
+    for (let i = 0; i < points.length; i += 2) {
+      const x = points[i] ?? 0;
+      const y = points[i + 1] ?? 0;
+      parts.push(`${i === 0 ? 'M' : 'L'}${(x * 100).toFixed(2)} ${(y * 100).toFixed(2)}`);
+    }
+    return parts.join(' ');
+  };
+
+  return (
+    <div className={styles.drawingWall}>
+      {drawings.slice(0, 24).map((drawing) => (
+        <motion.div
+          key={drawing.id}
+          className={styles.drawingCard}
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.3 }}
+        >
+          <svg viewBox="0 0 100 100" preserveAspectRatio="none" className={styles.drawingSvg}>
+            {drawing.strokes.map((stroke, i) => (
+              <path
+                key={i}
+                d={toPath(stroke.points)}
+                stroke={stroke.color}
+                strokeWidth={stroke.width}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                fill="none"
+                vectorEffect="non-scaling-stroke"
+              />
+            ))}
+          </svg>
+        </motion.div>
       ))}
     </div>
   );

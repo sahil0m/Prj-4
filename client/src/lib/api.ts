@@ -274,6 +274,13 @@ export const api = {
 
   /* ---------------- sessions ---------------- */
 
+  listSessions: (options: { deckId?: string } = {}): Promise<{ sessions: PastSession[] }> => {
+    const params = new URLSearchParams();
+    if (options.deckId) params.set('deckId', options.deckId);
+    const query = params.toString();
+    return request(`/sessions${query ? `?${query}` : ''}`);
+  },
+
   startSession: (deckId: string): Promise<{ session: LiveSession }> =>
     request('/sessions', { method: 'POST', body: { deckId } }),
 
@@ -391,6 +398,18 @@ export interface TextSummary {
   themes: { label: string; count: number; example?: string }[];
   sentiment?: 'positive' | 'mixed' | 'negative' | 'neutral';
   provider: string;
+}
+
+export interface PastSession {
+  id: string;
+  deckId: string;
+  title: string;
+  joinCode: string;
+  state: string;
+  participants: number;
+  responses: number;
+  startedAt: string;
+  endedAt: string | null;
 }
 
 export interface LiveSession {

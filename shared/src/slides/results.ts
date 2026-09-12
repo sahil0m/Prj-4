@@ -80,6 +80,24 @@ export interface ScatterSummary {
   count: number;
 }
 
+export interface FieldSummary {
+  fieldId: string;
+  label: string;
+  /** Free text answers, for a text field. */
+  texts: string[];
+  /** Counts per option, for a choice or boolean field. */
+  counts: { label: string; count: number }[];
+  /** Mean, for a numeric field. */
+  average: number | null;
+  responses: number;
+}
+
+export interface Stroke {
+  color: string;
+  width: number;
+  points: number[];
+}
+
 /** Anything the server or a chart may receive for a slide. */
 export type ResultData =
   | { type: 'counts'; items: CountedItem[]; totalVotes: number }
@@ -92,6 +110,8 @@ export type ResultData =
   | { type: 'points'; items: PointsSummary[] }
   | { type: 'scatter'; points: ScatterSummary[] }
   | { type: 'pins'; pins: { x: number; y: number }[] }
+  | { type: 'fields'; fields: FieldSummary[] }
+  | { type: 'drawings'; drawings: { id: string; strokes: Stroke[] }[] }
   | { type: 'none' };
 
 /** One stored answer, as the aggregator needs it. */
@@ -107,6 +127,13 @@ export interface LabelSource {
   options?: { id: string; label: string; correct?: boolean }[];
   items?: { id: string; label: string }[];
   statements?: { id: string; label: string }[];
+  pairs?: { id: string; left: string; right: string }[];
+  fields?: {
+    id: string;
+    label: string;
+    type?: string;
+    options?: { id: string; label: string }[];
+  }[];
   min?: number;
   max?: number;
   stars?: number;
@@ -261,6 +288,120 @@ export function aggregate(kind: SlideKind, rows: AnswerRow[], config: LabelSourc
           : [];
       });
       return { type: 'counts', ...tallyIds(ballots, config.options ?? []) };
+    }
+
+    case 'quiz_match': {
+      // Per pair, how many matched it correctly. A single right-or-wrong
+      // total would hide which pair the room actually found hard.
+      const pairs = config.pairs ?? [];
+      const correct = new Map<string, number>();
+
+      for (const row of rows) {
+        const payload = asRecord(row.payload);
+        const matches = asRecord(payload?.matches);
+        if (!matches) continue;
+
+        for (const pair of pairs) {
+          const given = matches[pair.id];
+          if (typeof given === 'string' && given.trim() === pair.right.trim()) {
+            correct.set(pair.id, (correct.get(pair.id) ?? 0) + 1);
+          }
+        }
+      }
+
+      const items: CountedItem[] = pairs.map((pair) => {
+        const count = correct.get(pair.id) ?? 0;
+        return {
+          id: pair.id,
+          label: pair.left,
+          count,
+          percent: percentOf(count, rows.length),
+          correct: true,
+        };
+      });
+
+      return { type: 'counts', items, totalVotes: rows.length };
+    }
+
+    case 'quick_form': {
+      const fields = config.fields ?? [];
+
+      const summaries: FieldSummary[] = fields.map((field) => {
+        const texts: string[] = [];
+        const counts = new Map<string, number>();
+        const numbers: number[] = [];
+
+        for (const row of rows) {
+          const payload = asRecord(row.payload);
+          const values = asRecord(payload?.fields);
+          const value = values?.[field.id];
+
+          if (value === undefined || value === null || value === '') continue;
+
+          if (typeof value === 'number' && Number.isFinite(value)) {
+            numbers.push(value);
+          } else if (typeof value === 'boolean') {
+            const label = value ? 'Yes' : 'No';
+            counts.set(label, (counts.get(label) ?? 0) + 1);
+          } else if (typeof value === 'string') {
+            // A choice field stores an option id; anything else is prose.
+            const option = field.options?.find((o) => o.id === value);
+            if (option) counts.set(option.label, (counts.get(option.label) ?? 0) + 1);
+            else texts.push(value);
+          }
+        }
+
+        const responses =
+          texts.length + numbers.length + [...counts.values()].reduce((a, b) => a + b, 0);
+
+        return {
+          fieldId: field.id,
+          label: field.label,
+          texts,
+          counts: [...counts.entries()]
+            .map(([label, count]) => ({ label, count }))
+            .sort((a, b) => b.count - a.count),
+          average:
+            numbers.length > 0
+              ? round(numbers.reduce((sum, n) => sum + n, 0) / numbers.length)
+              : null,
+          responses,
+        };
+      });
+
+      return { type: 'fields', fields: summaries };
+    }
+
+    case 'drawing': {
+      const drawings: { id: string; strokes: Stroke[] }[] = [];
+
+      for (const row of rows) {
+        const payload = asRecord(row.payload);
+        const raw = Array.isArray(payload?.strokes) ? payload.strokes : [];
+
+        const strokes: Stroke[] = [];
+
+        for (const entry of raw) {
+          const stroke = asRecord(entry);
+          const points = Array.isArray(stroke?.points)
+            ? stroke.points.filter((n): n is number => typeof n === 'number' && Number.isFinite(n))
+            : [];
+
+          // Fewer than two pairs is not a line, and an odd count means the
+          // payload was truncated; either way it cannot be drawn.
+          if (points.length < 4 || points.length % 2 !== 0) continue;
+
+          strokes.push({
+            color: typeof stroke?.color === 'string' ? stroke.color : '#8b84fc',
+            width: typeof stroke?.width === 'number' ? stroke.width : 1.6,
+            points,
+          });
+        }
+
+        if (strokes.length > 0) drawings.push({ id: row.id, strokes });
+      }
+
+      return { type: 'drawings', drawings };
     }
 
     case 'who_will_win': {

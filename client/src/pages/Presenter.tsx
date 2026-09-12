@@ -499,6 +499,43 @@ function ContentSlide({ kind, config }: { kind: SlideKind; config: Record<string
         <img src={text('imageUrl')} alt={text('alt')} className={styles.contentImage} />
       );
 
+    case 'heading':
+      // The prompt is already rendered above as the slide title, so a
+      // heading slide needs only its subtitle, if any. Repeating the title
+      // here would print it twice.
+      return null;
+
+    case 'section_break':
+      return <div className={styles.sectionBreak} aria-hidden="true" />;
+
+    case 'video': {
+      const url = text('url');
+      return url === '' ? (
+        <p className={styles.contentPlaceholder}>No video set</p>
+      ) : (
+        <p className={styles.contentPlaceholder}>
+          Play the video from your own screen, then continue.
+        </p>
+      );
+    }
+
+    case 'embed': {
+      const url = text('url');
+      return url === '' ? (
+        <p className={styles.contentPlaceholder}>Nothing embedded yet</p>
+      ) : (
+        // Sandboxed: an embedded page must not be able to script this one,
+        // read its storage, or navigate the presenter away mid-session.
+        <iframe
+          src={url}
+          className={styles.embed}
+          title="Embedded content"
+          sandbox="allow-scripts allow-same-origin allow-popups"
+          referrerPolicy="no-referrer"
+        />
+      );
+    }
+
     case 'paragraph':
     case 'instructions':
       return <p className={styles.paragraph}>{text('body') || text('text')}</p>;

@@ -1,0 +1,250 @@
+.page {
+  min-height: 100dvh;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-2xl);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.iconButton {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-md);
+  color: var(--color-ink-muted);
+}
+
+.iconButton:hover {
+  color: var(--color-ink);
+  background: color-mix(in srgb, var(--color-ink) 7%, transparent);
+}
+
+.title {
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.main {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: var(--space-2xl);
+}
+
+.loading {
+  display: grid;
+  place-items: center;
+  padding: var(--space-4xl);
+  color: var(--color-ink-subtle);
+}
+
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---------------- empty ---------------- */
+
+.empty {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-4xl) var(--space-lg);
+  text-align: center;
+}
+
+.emptyIcon {
+  color: var(--color-ink-subtle);
+  margin-bottom: var(--space-sm);
+}
+
+.emptyTitle {
+  font-size: 19px;
+  font-weight: 650;
+}
+
+.emptyBody {
+  max-width: 42ch;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--color-ink-muted);
+}
+
+/* ---------------- list ---------------- */
+
+.list {
+  display: grid;
+  gap: var(--space-xl);
+}
+
+.group {
+  display: grid;
+  gap: 6px;
+}
+
+.groupLabel {
+  margin-bottom: 2px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--color-ink-subtle);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+  padding: var(--space-md) var(--space-lg);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  flex-wrap: wrap;
+}
+
+/* A session still running is worth spotting in a list of finished ones. */
+.row[data-live='true'] {
+  border-color: color-mix(in srgb, var(--color-positive) 45%, transparent);
+  background: color-mix(in srgb, var(--color-positive) 7%, transparent);
+}
+
+.rowText {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.rowTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.liveTag {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-positive);
+  background: color-mix(in srgb, var(--color-positive) 16%, transparent);
+}
+
+.rowMeta {
+  font-size: 12.5px;
+  color: var(--color-ink-subtle);
+}
+
+.stats {
+  display: flex;
+  gap: var(--space-md);
+  flex: none;
+}
+
+.stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-ink-muted);
+}
+
+.downloadButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+  padding: 8px 14px;
+  border-radius: var(--radius-md);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-ink-muted);
+  border: 1px solid var(--color-border-strong);
+  transition:
+    color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
+}
+
+.downloadButton:hover:not(:disabled) {
+  color: var(--color-accent);
+  border-color: color-mix(in srgb, var(--color-accent) 50%, transparent);
+}
+
+.downloadButton:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* ---------------- menu ---------------- */
+
+.menu {
+  min-width: 240px;
+  padding: 5px;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--elevation-lg);
+  z-index: var(--layer-popover);
+}
+
+.menuItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 9px 11px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 550;
+  color: var(--color-ink-muted);
+  cursor: pointer;
+  outline: none;
+}
+
+.menuItem[data-highlighted] {
+  color: var(--color-ink);
+  background: color-mix(in srgb, var(--color-ink) 7%, transparent);
+}
+
+.menuItem svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+/* What each format actually contains, so the choice is not a guess. */
+.menuHint {
+  display: block;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--color-ink-subtle);
+}
+
+@media (max-width: 640px) {
+  .main {
+    padding: var(--space-lg);
+  }
+
+  .stats {
+    order: 3;
+    width: 100%;
+  }
+}

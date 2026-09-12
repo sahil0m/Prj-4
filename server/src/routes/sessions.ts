@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import type { Types } from 'mongoose';
 import { env } from '../config.js';
-import { Session } from '../models/index.js';
+import { Session, Participant, Response } from '../models/index.js';
 import { requireAuth, type AuthedRequest } from '../middleware/requireAuth.js';
 import * as sessions from '../services/sessions.js';
 import * as exports from '../services/export.js';
@@ -53,6 +53,63 @@ export function sessionRoutes(): Router {
   router.use(requireAuth);
 
   const ownerOf = (req: unknown): string => (req as AuthedRequest).user.id;
+
+  /**
+   * Every session this user has run.
+   *
+   * The results of a session outlive the session: a teacher who ran a quiz
+   * on Monday needs Monday's scores on Tuesday, and until this existed the
+   * only way to an export was to still have the presenter view open.
+   */
+  router.get('/', (req, res, next) => {
+    void (async () => {
+      try {
+        const query = z
+          .object({
+            deckId: z.string().max(64).optional(),
+            limit: z.coerce.number().int().min(1).max(100).default(50),
+          })
+          .parse(req.query);
+
+        const filter: Record<string, unknown> = { ownerId: ownerOf(req) };
+        if (query.deckId) filter.deckId = query.deckId;
+
+        const rows = await Session.find(filter)
+          .select('deckId title joinCode state stats startedAt endedAt')
+          .sort({ startedAt: -1 })
+          .limit(query.limit)
+          .lean();
+
+        // Counted for real rather than read from the cached stats, which can
+        // drift if a process died mid-session; a history page showing a
+        // wrong number is worse than one that takes a moment longer.
+        const sessions = await Promise.all(
+          rows.map(async (row) => {
+            const [participants, responses] = await Promise.all([
+              Participant.countDocuments({ sessionId: row._id, blockedAt: null }),
+              Response.countDocuments({ sessionId: row._id, deletedAt: null }),
+            ]);
+
+            return {
+              id: row._id.toString(),
+              deckId: (row.deckId as Types.ObjectId).toString(),
+              title: row.title,
+              joinCode: row.joinCode,
+              state: row.state,
+              participants,
+              responses,
+              startedAt: row.startedAt,
+              endedAt: row.endedAt,
+            };
+          }),
+        );
+
+        res.json({ sessions });
+      } catch (err) {
+        next(err);
+      }
+    })();
+  });
 
   router.post('/', (req, res, next) => {
     void (async () => {

@@ -596,3 +596,149 @@
   color: var(--color-canvas);
   background: var(--color-positive);
 }
+
+/* ---------------- quick form ---------------- */
+
+.formResults {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(clamp(240px, 26vw, 380px), 1fr));
+  gap: clamp(12px, 1.6vw, 24px);
+  width: 100%;
+  max-height: 100%;
+  overflow-y: auto;
+}
+
+.formField {
+  display: grid;
+  gap: var(--space-sm);
+  align-content: start;
+  padding: clamp(12px, 1.4vw, 20px);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--color-ink) 5%, transparent);
+  border: 1px solid var(--color-border);
+}
+
+.formLabel {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  font-size: clamp(14px, 1.3vw, 20px);
+  font-weight: 650;
+}
+
+.formCount {
+  font-size: 0.75em;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-ink-subtle);
+}
+
+.formAverage {
+  font-size: clamp(26px, 3vw, 46px);
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  color: var(--color-accent);
+}
+
+.formBars {
+  display: grid;
+  gap: 6px;
+}
+
+.formBarRow {
+  display: grid;
+  grid-template-columns: minmax(60px, 1fr) 2fr auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.formBarLabel {
+  font-size: clamp(12px, 1.1vw, 16px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.formBarTrack {
+  height: clamp(10px, 1.2vh, 18px);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--color-ink) 8%, transparent);
+  overflow: hidden;
+}
+
+.formBarFill {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--color-data-1);
+}
+
+.formBarFill[data-series='1'] {
+  background: var(--color-data-2);
+}
+.formBarFill[data-series='2'] {
+  background: var(--color-data-3);
+}
+.formBarFill[data-series='3'] {
+  background: var(--color-data-4);
+}
+.formBarFill[data-series='4'] {
+  background: var(--color-data-5);
+}
+.formBarFill[data-series='5'] {
+  background: var(--color-data-6);
+}
+
+.formBarValue {
+  font-size: clamp(12px, 1.1vw, 16px);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.formTexts {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.formTexts li {
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  font-size: clamp(12px, 1.1vw, 16px);
+  line-height: 1.4;
+  background: color-mix(in srgb, var(--color-ink) 6%, transparent);
+}
+
+.formMore,
+.formEmpty {
+  font-size: clamp(11.5px, 1vw, 15px);
+  color: var(--color-ink-subtle);
+  background: none !important;
+}
+
+/* ---------------- drawings ---------------- */
+
+.drawingWall {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(clamp(130px, 13vw, 210px), 1fr));
+  gap: clamp(8px, 1vw, 16px);
+  width: 100%;
+  max-height: 100%;
+  overflow-y: auto;
+}
+
+.drawingCard {
+  aspect-ratio: 4 / 3;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-ink) 8%, transparent);
+  border: 1px solid var(--color-border);
+  overflow: hidden;
+}
+
+.drawingSvg {
+  width: 100%;
+  height: 100%;
+}
