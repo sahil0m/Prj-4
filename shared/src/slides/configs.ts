@@ -7,6 +7,9 @@ import {
   zResultLayoutBar,
   zOpenTextLayout,
   zLocalId,
+  zSafeUrl,
+  zFiniteNumber,
+  zFiniteInRange,
 } from './primitives.js';
 
 /**
@@ -14,10 +17,7 @@ import {
  * slide. Completeness is enforced separately by `validateSlideReady`, so the
  * editor can hold a half-finished slide without throwing.
  */
-export const zDraftUrl = z
-  .union([z.literal(''), z.string().url().max(2000)])
-  .optional()
-  .default('');
+export const zDraftUrl = z.union([z.literal(''), zSafeUrl]).optional().default('');
 
 /* ------------------------------------------------------------------ */
 /* Free text                                                           */
@@ -80,7 +80,7 @@ export const zScales = zSlideBase.extend({
   statements: z.array(zStatement).min(1).max(12),
   min: z.number().int().min(0).max(10).default(1),
   max: z.number().int().min(2).max(100).default(5),
-  step: z.number().min(0.1).max(10).default(1),
+  step: zFiniteInRange(0.1, 10).default(1),
   minLabel: z.string().trim().max(60).default('Strongly disagree'),
   maxLabel: z.string().trim().max(60).default('Strongly agree'),
   layout: z.enum(['bars', 'spider']).default('bars'),
@@ -116,10 +116,10 @@ export const zPinImage = zSlideBase.extend({
 
 export const zGuessNumber = zSlideBase.extend({
   kind: z.literal('guess_number'),
-  min: z.number().default(0),
-  max: z.number().default(1000),
+  min: zFiniteNumber.default(0),
+  max: zFiniteNumber.default(1000),
   unit: z.string().trim().max(20).default(''),
-  correctValue: z.number().optional(),
+  correctValue: zFiniteNumber.optional(),
 });
 
 export const zStarRating = zSlideBase.extend({
@@ -221,8 +221,8 @@ export const zDrawing = zSlideBase.extend({
 
 export const zMapPin = zSlideBase.extend({
   kind: z.literal('map_pin'),
-  centerLat: z.number().min(-90).max(90).default(20),
-  centerLng: z.number().min(-180).max(180).default(0),
+  centerLat: zFiniteInRange(-90, 90).default(20),
+  centerLng: zFiniteInRange(-180, 180).default(0),
   zoom: z.number().int().min(1).max(18).default(2),
   pinsPerPerson: z.number().int().min(1).max(5).default(1),
 });

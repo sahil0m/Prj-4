@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { zLocalId } from './primitives.js';
+import { zLocalId, zFiniteNumber, zFiniteInRange } from './primitives.js';
 
 /**
  * The shape of one participant's answer, per slide kind.
@@ -48,7 +48,7 @@ export const zWhoWillWinAnswer = z.object({
 export const zScalesAnswer = z.object({
   kind: z.literal('scales'),
   /** statementId -> chosen value */
-  values: z.record(zLocalId, z.number()),
+  values: z.record(zLocalId, zFiniteNumber),
 });
 
 export const zRankingAnswer = z.object({
@@ -66,17 +66,23 @@ export const zPoints100Answer = z.object({
 export const zGrid2x2Answer = z.object({
   kind: z.literal('grid_2x2'),
   /** itemId -> position, each axis normalised 0..1 */
-  positions: z.record(zLocalId, z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1) })),
+  positions: z.record(
+    zLocalId,
+    z.object({ x: zFiniteInRange(0, 1), y: zFiniteInRange(0, 1) }),
+  ),
 });
 
 export const zPinImageAnswer = z.object({
   kind: z.literal('pin_image'),
-  pins: z.array(z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1) })).min(1).max(10),
+  pins: z
+    .array(z.object({ x: zFiniteInRange(0, 1), y: zFiniteInRange(0, 1) }))
+    .min(1)
+    .max(10),
 });
 
 export const zGuessNumberAnswer = z.object({
   kind: z.literal('guess_number'),
-  value: z.number(),
+  value: zFiniteNumber,
 });
 
 export const zStarRatingAnswer = z.object({
@@ -122,7 +128,7 @@ export const zQuizOrderAnswer = z.object({
 export const zQuickFormAnswer = z.object({
   kind: z.literal('quick_form'),
   /** fieldId -> value */
-  fields: z.record(zLocalId, z.union([z.string().max(1000), z.number(), z.boolean()])),
+  fields: z.record(zLocalId, z.union([z.string().max(1000), zFiniteNumber, z.boolean()])),
 });
 
 /* --- ours only ------------------------------------------------------ */
@@ -134,8 +140,12 @@ export const zDrawingAnswer = z.object({
     .array(
       z.object({
         color: z.string().max(16),
-        width: z.number().min(0.1).max(20),
-        points: z.array(z.number().min(0).max(1)).min(4).max(4000),
+        width: zFiniteInRange(0.1, 20),
+        points: z
+          .array(zFiniteInRange(0, 1))
+          .min(4)
+          .max(4000)
+          .refine((p) => p.length % 2 === 0, 'Points must be x,y pairs.'),
       }),
     )
     .min(1)
@@ -145,7 +155,7 @@ export const zDrawingAnswer = z.object({
 export const zMapPinAnswer = z.object({
   kind: z.literal('map_pin'),
   pins: z
-    .array(z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180) }))
+    .array(z.object({ lat: zFiniteInRange(-90, 90), lng: zFiniteInRange(-180, 180) }))
     .min(1)
     .max(5),
 });
