@@ -68,6 +68,7 @@ interface PresenterStore {
   next: () => void;
   previous: () => void;
   setParticipation: (open: boolean) => void;
+  removeResponse: (responseId: string) => void;
   dismissReaction: (id: number) => void;
   markAnswered: (id: string) => void;
   setResultsVisible: (visible: boolean) => void;
@@ -228,6 +229,16 @@ export const usePresenter = create<PresenterStore>((set, get) => ({
     set((current) => ({
       questions: current.questions.map((q) => (q.id === id ? { ...q, answered: true } : q)),
     }));
+  },
+
+  /**
+   * Takes one answer off the wall.
+   *
+   * A soft delete on the server, so the record survives for anyone who
+   * later asks what was said; the live tally simply stops counting it.
+   */
+  removeResponse(responseId) {
+    socket?.emit('presenter:remove-response', { responseId }, () => undefined);
   },
 
   setParticipation(open) {

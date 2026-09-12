@@ -24,6 +24,7 @@ import { usePresenter } from '../lib/presenter-store';
 import { Results } from '../components/Results';
 import { Leaderboard } from '../components/Leaderboard';
 import { ReactionLayer, QuestionButton, QuestionPanel } from '../components/LiveOverlay';
+import { Countdown } from '../components/Countdown';
 import { api, ApiError, type TextSummary } from '../lib/api';
 import { useAiAvailable } from '../components/AiPanel';
 import { toast } from 'sonner';
@@ -57,6 +58,7 @@ export function Presenter() {
   const previous = usePresenter((s) => s.previous);
   const setParticipation = usePresenter((s) => s.setParticipation);
   const setResultsVisible = usePresenter((s) => s.setResultsVisible);
+  const removeResponse = usePresenter((s) => s.removeResponse);
   const end = usePresenter((s) => s.end);
 
   const [fullscreen, setFullscreen] = useState(false);
@@ -233,6 +235,10 @@ export function Presenter() {
             </span>
           )}
 
+          {/* Only while a clock is actually running; an empty ring on
+              every slide would be furniture. */}
+          <Countdown endsAt={state?.countdownEndsAt ?? null} />
+
           <span className={styles.participants}>
             <Users size={17} />
             {state?.participantCount ?? 0}
@@ -300,6 +306,7 @@ export function Presenter() {
               ) : (
                 <Results
                   results={results}
+                  onRemove={removeResponse}
                   // A quiz only reveals which answer was right once the
                   // presenter says so; showing it while people are still
                   // answering would give the game away on the big screen.

@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
-import { motion } from 'motion/react';
-import { Check } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { Check, X } from 'lucide-react';
 import type { SlideResults, ResultData, CountedItem, WordTally } from '@pulse/shared';
 import styles from './Results.module.css';
 
@@ -16,8 +16,11 @@ import styles from './Results.module.css';
 export function Results({
   results,
   revealCorrect = false,
+  onRemove,
 }: {
   results: SlideResults | null;
+  /** Removes one answer. Absent when moderation does not apply. */
+  onRemove?: (responseId: string) => void;
   /**
    * Whether to mark the right answer.
    *
@@ -47,7 +50,7 @@ export function Results({
     case 'words':
       return <WordCloud words={data.words} />;
     case 'texts':
-      return <TextWall entries={data.entries} />;
+      return <TextWall entries={data.entries} onRemove={onRemove} />;
     case 'numeric':
       return <NumericSummary summary={data.summary} />;
     case 'nps':
@@ -172,21 +175,47 @@ function WordCloud({ words }: { words: WordTally[] }) {
 /* Text                                                                */
 /* ------------------------------------------------------------------ */
 
-function TextWall({ entries }: { entries: { id: string; text: string; upvotes: number }[] }) {
+function TextWall({
+  entries,
+  onRemove,
+}: {
+  entries: { id: string; text: string; upvotes: number }[];
+  onRemove?: (responseId: string) => void;
+}) {
   return (
     <div className={styles.textWall}>
-      {entries.slice(0, 30).map((entry) => (
-        <motion.blockquote
-          key={entry.id}
-          className={styles.textCard}
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-        >
-          {entry.text}
-          {entry.upvotes > 0 && <span className={styles.upvotes}>▲ {entry.upvotes}</span>}
-        </motion.blockquote>
-      ))}
+      <AnimatePresence>
+        {entries.slice(0, 30).map((entry) => (
+          <motion.blockquote
+            key={entry.id}
+            className={styles.textCard}
+            layout
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.92 }}
+            transition={{ duration: 0.3 }}
+          >
+            {entry.text}
+            {entry.upvotes > 0 && <span className={styles.upvotes}>▲ {entry.upvotes}</span>}
+
+            {/* Appears on hover: a delete button on every card would be the
+                most prominent thing on a wall of answers. */}
+            {onRemove && (
+              <button
+                type="button"
+                className={styles.removeAnswer}
+                onClick={() => {
+                  onRemove(entry.id);
+                }}
+                aria-label="Remove this answer"
+                title="Remove this answer"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </motion.blockquote>
+        ))}
+      </AnimatePresence>
     </div>
   );
 }

@@ -8,6 +8,7 @@ import {
 } from './lib/session';
 import { AnswerInput } from './components/AnswerInput';
 import { ActionBar } from './components/ActionBar';
+import { CountdownBar } from './components/Countdown';
 import styles from './App.module.css';
 
 /**
@@ -235,6 +236,10 @@ export function App() {
           <Waiting message="This question is closed" />
         ) : (
           <>
+            {/* Above the question, so it is seen before the answer is
+                chosen rather than discovered afterwards. */}
+            <CountdownBar endsAt={state.countdownEndsAt} />
+
             <h1 className={styles.prompt}>{promptOf(slide)}</h1>
             {subtitleOf(slide) !== '' && <p className={styles.subtitle}>{subtitleOf(slide)}</p>}
 
