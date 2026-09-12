@@ -14,15 +14,16 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "dev": "npm run dev --workspaces --if-present",
-    "build": "npm run build --workspaces --if-present",
+    "dev": "npm run theme:build && npm run dev --workspaces --if-present",
+    "build": "npm run theme:build && npm run build --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "eslint . --max-warnings 0",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "verify": "npm run format:check && npm run lint && npm run typecheck && npm test"
+    "verify": "npm run format:check && npm run lint && npm run typecheck && npm test",
+    "theme:build": "npm run build -w shared && node scripts/build-theme.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
@@ -31,6 +32,9 @@
     "prettier": "^3.4.2",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.18.2",
-    "vitest": "^2.1.8"
+    "vitest": "^3.2.7"
+  },
+  "overrides": {
+    "vite": "^6.0.7"
   }
 }

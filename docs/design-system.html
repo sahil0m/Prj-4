@@ -1,187 +1,265 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Pulse Design System</title>
+<!doctype html><html lang=en><head><meta charset=utf-8><title>Pulse</title>
+<link rel=preconnect href=https://fonts.googleapis.com><link rel=preconnect href=https://fonts.gstatic.com crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;600;700&family=JetBrains+Mono:wght@600;700&display=swap" rel=stylesheet>
 <style>
-:root[data-theme="dark"] {
-    --color-canvas: #07080c;
-    --color-surface: #12151e;
-    --color-surface-raised: #1a1e29;
-    --color-border: #252a38;
-    --color-border-strong: #39404f;
-    --color-ink: #eef0f4;
-    --color-ink-muted: #b4bac6;
-    --color-ink-subtle: #8a92a3;
-    --color-on-accent: #ffffff;
-    --color-accent: #6366f1;
-    --color-accent-hover: #818cf8;
-    --color-accent-soft: rgba(99, 102, 241, 0.16);
-    --color-positive: #10b981;
-    --color-caution: #f59e0b;
-    --color-danger: #f43f5e;
-    --color-focus: #818cf8;
-    --color-data-1: #6366f1;
-    --color-data-2: #65a30d;
-    --color-data-3: #7c3aed;
-    --color-data-4: #10b981;
-    --color-data-5: #e11d48;
-    --color-data-6: #0ea5e9;
-    --color-data-7: #ea580c;
-    --color-data-8: #9333ea;
-    --color-data-9: #16a34a;
-    --color-data-10: #db2777;
-    --color-data-11: #d97706;
-    --color-data-12: #c026d3;
+:root[data-theme=dark]{
+  --color-canvas: #05060d;
+  --color-surface: #0e111c;
+  --color-surface-raised: #171b28;
+  --color-border: #242938;
+  --color-border-strong: #373d4d;
+  --color-ink: #eef0f4;
+  --color-ink-muted: #9aa1b2;
+  --color-ink-subtle: #6f7688;
+  --color-on-accent: #ffffff;
+  --color-accent: #7c5cf6;
+  --color-accent-hover: #8b84fc;
+  --color-accent-soft: rgba(99, 102, 241, 0.16);
+  --color-positive: #10b981;
+  --color-caution: #f59e0b;
+  --color-danger: #f43f5e;
+  --color-focus: #8b84fc;
+  --color-data-1: #8b84fc;
+  --gradient-data-1: linear-gradient(135deg, #c6cbff 0%, #7c5cf6 100%);
+  --glow-data-1: 0 0 24px -6px rgba(139,132,252,0.60);
+  --color-data-2: #a3e635;
+  --gradient-data-2: linear-gradient(135deg, #d9f99d 0%, #84cc16 100%);
+  --glow-data-2: 0 0 24px -6px rgba(163,230,53,0.55);
+  --color-data-3: #f472b6;
+  --gradient-data-3: linear-gradient(135deg, #fbcfe8 0%, #ec4899 100%);
+  --glow-data-3: 0 0 24px -6px rgba(244,114,182,0.55);
+  --color-data-4: #34d399;
+  --gradient-data-4: linear-gradient(135deg, #a7f3d0 0%, #10b981 100%);
+  --glow-data-4: 0 0 24px -6px rgba(52,211,153,0.55);
+  --color-data-5: #fb7185;
+  --gradient-data-5: linear-gradient(135deg, #fecdd3 0%, #f43f5e 100%);
+  --glow-data-5: 0 0 24px -6px rgba(251,113,133,0.55);
+  --color-data-6: #2dd4bf;
+  --gradient-data-6: linear-gradient(135deg, #99f6e4 0%, #14b8a6 100%);
+  --glow-data-6: 0 0 24px -6px rgba(45,212,191,0.55);
+  --color-data-7: #e879f9;
+  --gradient-data-7: linear-gradient(135deg, #f5d0fe 0%, #d946ef 100%);
+  --glow-data-7: 0 0 24px -6px rgba(232,121,249,0.55);
+  --color-data-8: #fbbf24;
+  --gradient-data-8: linear-gradient(135deg, #fde68a 0%, #f59e0b 100%);
+  --glow-data-8: 0 0 24px -6px rgba(251,191,36,0.55);
+  --color-data-9: #c084fc;
+  --gradient-data-9: linear-gradient(135deg, #e9d5ff 0%, #a855f7 100%);
+  --glow-data-9: 0 0 24px -6px rgba(192,132,252,0.55);
+  --color-data-10: #fb923c;
+  --gradient-data-10: linear-gradient(135deg, #fed7aa 0%, #f97316 100%);
+  --glow-data-10: 0 0 24px -6px rgba(251,146,60,0.55);
+  --color-data-11: #818cf8;
+  --gradient-data-11: linear-gradient(135deg, #c7d2fe 0%, #6366f1 100%);
+  --glow-data-11: 0 0 24px -6px rgba(129,140,248,0.55);
+  --color-data-12: #38bdf8;
+  --gradient-data-12: linear-gradient(135deg, #bae6fd 0%, #0ea5e9 100%);
+  --glow-data-12: 0 0 24px -6px rgba(56,189,248,0.55);
+  --canvas-image: radial-gradient(60% 50% at 15% 0%, rgba(124, 92, 246, 0.22) 0%, transparent 70%), radial-gradient(50% 45% at 85% 5%, rgba(34, 211, 238, 0.16) 0%, transparent 70%), radial-gradient(120% 100% at 50% 0%, #1a1533 0%, #0e111c 45%, #05060d 100%);
+  --accent-gradient: linear-gradient(135deg, #8b84fc 0%, #7c5cf6 45%, #6d3fea 100%);
+  --glass-background: rgba(23, 27, 40, 0.62);
+  --glass-blur: blur(20px) saturate(1.6);
+  --glass-border: 1px solid rgba(255, 255, 255, 0.08);
+  --glass-shadow: 0 1px 0 0 rgba(255,255,255,0.06) inset, 0 16px 40px -12px rgba(5,6,13,0.70);
+  --rim: linear-gradient(180deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.02) 40%, transparent 100%);
+  --hairline: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.10) 20%, rgba(255,255,255,0.10) 80%, transparent 100%);
+  --accent-glow: 0 0 0 1px rgba(124, 92, 246, 0.40), 0 0 24px -4px rgba(124, 92, 246, 0.45), 0 0 64px -12px rgba(124, 92, 246, 0.30);
+  --focus-ring: 0 0 0 2px rgba(5, 6, 13, 1), 0 0 0 4px rgba(139, 132, 252, 0.90);
 }
-:root[data-theme="light"] {
-    --color-canvas: #fbfbfd;
-    --color-surface: #ffffff;
-    --color-surface-raised: #ffffff;
-    --color-border: #e6e8ee;
-    --color-border-strong: #cfd3dd;
-    --color-ink: #12151e;
-    --color-ink-muted: #5a6274;
-    --color-ink-subtle: #8a92a3;
-    --color-on-accent: #ffffff;
-    --color-accent: #4f46e5;
-    --color-accent-hover: #4338ca;
-    --color-accent-soft: rgba(79, 70, 229, 0.10);
-    --color-positive: #059669;
-    --color-caution: #b45309;
-    --color-danger: #e11d48;
-    --color-focus: #4f46e5;
-    --color-data-1: #6366f1;
-    --color-data-2: #65a30d;
-    --color-data-3: #7c3aed;
-    --color-data-4: #10b981;
-    --color-data-5: #e11d48;
-    --color-data-6: #0ea5e9;
-    --color-data-7: #ea580c;
-    --color-data-8: #9333ea;
-    --color-data-9: #16a34a;
-    --color-data-10: #db2777;
-    --color-data-11: #d97706;
-    --color-data-12: #c026d3;
+:root[data-theme=light]{
+  --color-canvas: #fbfbfd;
+  --color-surface: #ffffff;
+  --color-surface-raised: #ffffff;
+  --color-border: #e6e8ee;
+  --color-border-strong: #cfd3dd;
+  --color-ink: #0e111c;
+  --color-ink-muted: #4e5567;
+  --color-ink-subtle: #6f7688;
+  --color-on-accent: #ffffff;
+  --color-accent: #6d3fea;
+  --color-accent-hover: #5d2fce;
+  --color-accent-soft: rgba(79, 70, 229, 0.10);
+  --color-positive: #059669;
+  --color-caution: #b45309;
+  --color-danger: #e11d48;
+  --color-focus: #6d3fea;
+  --color-data-1: #6d3fea;
+  --gradient-data-1: linear-gradient(135deg, #8b84fc 0%, #5d2fce 100%);
+  --glow-data-1: 0 0 24px -6px rgba(139,132,252,0.60);
+  --color-data-2: #3f6212;
+  --gradient-data-2: linear-gradient(135deg, #84cc16 0%, #365314 100%);
+  --glow-data-2: 0 0 24px -6px rgba(163,230,53,0.55);
+  --color-data-3: #db2777;
+  --gradient-data-3: linear-gradient(135deg, #f472b6 0%, #9d174d 100%);
+  --glow-data-3: 0 0 24px -6px rgba(244,114,182,0.55);
+  --color-data-4: #065f46;
+  --gradient-data-4: linear-gradient(135deg, #34d399 0%, #064e3b 100%);
+  --glow-data-4: 0 0 24px -6px rgba(52,211,153,0.55);
+  --color-data-5: #e11d48;
+  --gradient-data-5: linear-gradient(135deg, #fb7185 0%, #9f1239 100%);
+  --glow-data-5: 0 0 24px -6px rgba(251,113,133,0.55);
+  --color-data-6: #115e59;
+  --gradient-data-6: linear-gradient(135deg, #2dd4bf 0%, #134e4a 100%);
+  --glow-data-6: 0 0 24px -6px rgba(45,212,191,0.55);
+  --color-data-7: #c026d3;
+  --gradient-data-7: linear-gradient(135deg, #e879f9 0%, #86198f 100%);
+  --glow-data-7: 0 0 24px -6px rgba(232,121,249,0.55);
+  --color-data-8: #92400e;
+  --gradient-data-8: linear-gradient(135deg, #fbbf24 0%, #78350f 100%);
+  --glow-data-8: 0 0 24px -6px rgba(251,191,36,0.55);
+  --color-data-9: #9333ea;
+  --gradient-data-9: linear-gradient(135deg, #c084fc 0%, #6b21a8 100%);
+  --glow-data-9: 0 0 24px -6px rgba(192,132,252,0.55);
+  --color-data-10: #9a3412;
+  --gradient-data-10: linear-gradient(135deg, #fb923c 0%, #7c2d12 100%);
+  --glow-data-10: 0 0 24px -6px rgba(251,146,60,0.55);
+  --color-data-11: #4f46e5;
+  --gradient-data-11: linear-gradient(135deg, #818cf8 0%, #3730a3 100%);
+  --glow-data-11: 0 0 24px -6px rgba(129,140,248,0.55);
+  --color-data-12: #075985;
+  --gradient-data-12: linear-gradient(135deg, #38bdf8 0%, #0c4a6e 100%);
+  --glow-data-12: 0 0 24px -6px rgba(56,189,248,0.55);
+  --canvas-image: radial-gradient(60% 50% at 15% 0%, rgba(124, 92, 246, 0.10) 0%, transparent 70%), radial-gradient(50% 45% at 85% 5%, rgba(34, 211, 238, 0.09) 0%, transparent 70%), radial-gradient(120% 100% at 50% 0%, #ffffff 0%, #f7f8fa 45%, #eef0f4 100%);
+  --accent-gradient: linear-gradient(135deg, #8b84fc 0%, #7c5cf6 45%, #6d3fea 100%);
+  --glass-background: rgba(255, 255, 255, 0.72);
+  --glass-blur: blur(20px) saturate(1.4);
+  --glass-border: 1px solid rgba(5, 6, 13, 0.06);
+  --glass-shadow: 0 1px 0 0 rgba(255,255,255,0.90) inset, 0 16px 40px -12px rgba(5,6,13,0.12);
+  --rim: linear-gradient(180deg, rgba(255,255,255,0.90) 0%, rgba(255,255,255,0.30) 40%, transparent 100%);
+  --hairline: linear-gradient(90deg, transparent 0%, rgba(5,6,13,0.10) 20%, rgba(5,6,13,0.10) 80%, transparent 100%);
+  --accent-glow: 0 0 0 1px rgba(124, 92, 246, 0.40), 0 0 24px -4px rgba(124, 92, 246, 0.45), 0 0 64px -12px rgba(124, 92, 246, 0.30);
+  --focus-ring: 0 0 0 2px #ffffff, 0 0 0 4px rgba(109, 63, 234, 0.85);
 }
-:root {
-    --font-ui: "InterVariable", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
-    --font-display: "InterVariable", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
-    --font-mono: "JetBrains Mono", "SF Mono", Consolas, monospace;
-    --stagger: 38ms;
-    --space-hair: 2px;
-    --space-xs: 4px;
-    --space-sm: 8px;
-    --space-md: 12px;
-    --space-lg: 16px;
-    --space-xl: 24px;
-    --space-2xl: 32px;
-    --space-3xl: 48px;
-    --space-4xl: 64px;
-    --space-5xl: 96px;
-    --radius-sm: 6px;
-    --radius-md: 10px;
-    --radius-lg: 14px;
-    --radius-xl: 20px;
-    --radius-pill: 999px;
-    --elevation-none: none;
-    --elevation-sm: 0 1px 2px rgba(7, 8, 12, 0.32);
-    --elevation-md: 0 4px 12px -2px rgba(7, 8, 12, 0.40), 0 2px 4px -2px rgba(7, 8, 12, 0.30);
-    --elevation-lg: 0 12px 32px -8px rgba(7, 8, 12, 0.50), 0 4px 12px -4px rgba(7, 8, 12, 0.35);
-    --elevation-glow: 0 0 0 1px rgba(99, 102, 241, 0.30), 0 8px 28px -6px rgba(99, 102, 241, 0.35);
-    --duration-instant: 80ms;
-    --duration-fast: 140ms;
-    --duration-base: 220ms;
-    --duration-slow: 380ms;
-    --duration-chart: 620ms;
-    --duration-drama: 900ms;
-    --ease-standard: cubic-bezier(0.20, 0.00, 0.10, 1.00);
-    --ease-exit: cubic-bezier(0.40, 0.00, 1.00, 1.00);
-    --ease-enter: cubic-bezier(0.00, 0.00, 0.20, 1.00);
-    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1.00);
-    --layer-base: 0;
-    --layer-raised: 10;
-    --layer-sticky: 100;
-    --layer-drawer: 200;
-    --layer-overlay: 300;
-    --layer-modal: 400;
-    --layer-popover: 500;
-    --layer-toast: 600;
-    --layer-tooltip: 700;
+:root{
+  --font-ui: "InterVariable", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "InterVariable", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", Consolas, monospace;
+  --stagger: 38ms;
+  --space-hair: 2px;
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+  --space-2xl: 32px;
+  --space-3xl: 48px;
+  --space-4xl: 64px;
+  --space-5xl: 96px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-pill: 999px;
+  --elevation-none: none;
+  --elevation-sm: 0 2px 6px -1px rgba(5, 6, 13, 0.50);
+  --elevation-md: 0 8px 20px -6px rgba(5, 6, 13, 0.55), 0 2px 6px -2px rgba(5, 6, 13, 0.40);
+  --elevation-lg: 0 20px 48px -12px rgba(5, 6, 13, 0.65), 0 6px 16px -6px rgba(5, 6, 13, 0.45);
+  --elevation-xl: 0 32px 80px -20px rgba(5, 6, 13, 0.75), 0 10px 24px -8px rgba(5, 6, 13, 0.50);
+  --elevation-glow: 0 0 0 1px rgba(124, 92, 246, 0.40), 0 0 24px -4px rgba(124, 92, 246, 0.45), 0 0 64px -12px rgba(124, 92, 246, 0.30);
+  --duration-instant: 80ms;
+  --duration-fast: 140ms;
+  --duration-base: 220ms;
+  --duration-slow: 380ms;
+  --duration-chart: 620ms;
+  --duration-drama: 900ms;
+  --ease-standard: cubic-bezier(0.20, 0.00, 0.10, 1.00);
+  --ease-exit: cubic-bezier(0.40, 0.00, 1.00, 1.00);
+  --ease-enter: cubic-bezier(0.00, 0.00, 0.20, 1.00);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1.00);
+  --layer-base: 0;
+  --layer-raised: 10;
+  --layer-sticky: 100;
+  --layer-drawer: 200;
+  --layer-overlay: 300;
+  --layer-modal: 400;
+  --layer-popover: 500;
+  --layer-toast: 600;
+  --layer-tooltip: 700;
+  --gradient-iris: linear-gradient(135deg, #8b84fc 0%, #7c5cf6 45%, #6d3fea 100%);
+  --gradient-aurora: linear-gradient(135deg, #7c5cf6 0%, #5b8def 40%, #22d3ee 100%);
+  --gradient-ember: linear-gradient(135deg, #fbbf24 0%, #f97316 50%, #ea580c 100%);
+  --gradient-jade: linear-gradient(135deg, #6ee7b7 0%, #10b981 55%, #059669 100%);
+  --gradient-rose: linear-gradient(135deg, #fda4af 0%, #f43f5e 55%, #be123c 100%);
+  --gradient-sheen: linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.10) 45%, rgba(255,255,255,0.18) 50%, rgba(255,255,255,0.10) 55%, transparent 70%);
 }
-
 *{box-sizing:border-box;margin:0}
-body{background:var(--color-canvas);color:var(--color-ink);font-family:var(--font-ui);padding:var(--space-3xl);transition:background var(--duration-base) var(--ease-standard)}
-h1{font-size:34px;font-weight:700;letter-spacing:-.03em;margin-bottom:var(--space-sm)}
-h2{font-size:18px;font-weight:600;margin:var(--space-3xl) 0 var(--space-lg);color:var(--color-ink)}
-.sub{color:var(--color-ink-muted);font-size:15px;margin-bottom:var(--space-xl)}
-.wrap{max-width:1100px;margin:0 auto}
-.toggle{position:fixed;top:24px;right:24px;background:var(--color-surface-raised);color:var(--color-ink);border:1px solid var(--color-border-strong);border-radius:var(--radius-pill);padding:10px 18px;font:inherit;font-size:13px;font-weight:600;cursor:pointer}
-.toggle:focus-visible{outline:2px solid var(--color-focus);outline-offset:2px}
-.swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:var(--space-md)}
-.sw{border-radius:var(--radius-md);overflow:hidden;border:1px solid var(--color-border)}
-.sw .chip{height:70px}
-.sw .meta{padding:8px 10px;background:var(--color-surface);font-size:11px}
-.sw .meta b{display:block;font-size:12px;margin-bottom:2px}
-.sw .meta span{color:var(--color-ink-subtle);font-family:var(--font-mono)}
-.bars{background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-lg);padding:var(--space-xl);container-type:inline-size}
-.row{display:flex;align-items:center;gap:var(--space-lg);margin-bottom:var(--space-md)}
-.row .lb{width:130px;text-align:right;color:var(--color-ink-muted);font-size:14px;flex:none}
-.row .tr{flex:1;height:34px;background:var(--color-surface-raised);border-radius:var(--radius-sm);overflow:hidden}
-.row .fl{height:100%;border-radius:var(--radius-sm);animation:grow var(--duration-chart) var(--ease-spring) both}
-.row .vl{width:56px;font-weight:680;font-variant-numeric:tabular-nums}
-@keyframes grow{from{width:0}}
-.stage{background:var(--color-canvas);border:1px solid var(--color-border);border-radius:var(--radius-lg);padding:var(--space-3xl);container-type:inline-size;text-align:center}
-.stage .p{font-size:clamp(32px,4.4cqw,108px);font-weight:680;letter-spacing:-.02em;line-height:1.12}
-.stage .c{font-family:var(--font-mono);font-size:clamp(40px,6.5cqw,160px);font-weight:720;letter-spacing:.06em;color:var(--color-accent);margin-top:var(--space-lg)}
-.type{display:grid;gap:var(--space-md)}
-.type .r{display:flex;align-items:baseline;gap:var(--space-lg);padding-bottom:var(--space-md);border-bottom:1px solid var(--color-border)}
-.type .r .n{width:110px;color:var(--color-ink-subtle);font-size:11px;text-transform:uppercase;letter-spacing:.08em;flex:none}
-.btns{display:flex;gap:var(--space-md);flex-wrap:wrap}
-.btn{border:none;border-radius:var(--radius-md);padding:11px 20px;font:inherit;font-size:15px;font-weight:600;cursor:pointer;transition:all var(--duration-fast) var(--ease-standard)}
-.btn.pri{background:var(--color-accent);color:var(--color-on-accent)}
-.btn.pri:hover{background:var(--color-accent-hover)}
-.btn.sec{background:var(--color-surface-raised);color:var(--color-ink);border:1px solid var(--color-border-strong)}
-.btn.gho{background:transparent;color:var(--color-ink-muted)}
-.btn:focus-visible{outline:2px solid var(--color-focus);outline-offset:2px}
-.pills{display:flex;gap:var(--space-sm);flex-wrap:wrap}
-.pill{padding:5px 12px;border-radius:var(--radius-pill);font-size:12px;font-weight:600}
+body{
+  font-family:var(--font-ui);
+  background:var(--canvas-image);
+  background-attachment:fixed;
+  color:var(--color-ink);
+  min-height:100vh;padding:64px 32px;
+  transition:color .3s var(--ease-standard);
+}
+.w{max-width:1080px;margin:0 auto}
+.hero{margin-bottom:56px}
+.eyebrow{font-size:12px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;
+  background:var(--gradient-aurora);-webkit-background-clip:text;background-clip:text;color:transparent;margin-bottom:14px}
+h1{font-size:56px;font-weight:700;letter-spacing:-.035em;line-height:1.05;margin-bottom:16px}
+h1 em{font-style:normal;background:var(--gradient-iris);-webkit-background-clip:text;background-clip:text;color:transparent}
+.lede{font-size:19px;color:var(--color-ink-muted);max-width:620px;line-height:1.55}
+h2{font-size:13px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--color-ink-subtle);margin:56px 0 20px}
+.glass{background:var(--glass-background);backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);
+  border:var(--glass-border);box-shadow:var(--glass-shadow);border-radius:var(--radius-xl);position:relative;overflow:hidden}
+.glass::before{content:'';position:absolute;inset:0 0 auto;height:70px;background:var(--rim);pointer-events:none}
+.pad{padding:32px}
+.toggle{position:fixed;top:28px;right:28px;z-index:10;border:var(--glass-border);background:var(--glass-background);
+  backdrop-filter:var(--glass-blur);color:var(--color-ink);border-radius:999px;padding:11px 20px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;box-shadow:var(--glass-shadow)}
+.toggle:focus-visible{outline:none;box-shadow:var(--focus-ring)}
+.row{display:flex;align-items:center;gap:18px;margin-bottom:14px}
+.row .lb{width:150px;text-align:right;font-size:15px;color:var(--color-ink-muted);flex:none}
+.row .tr{flex:1;height:44px;border-radius:12px;background:color-mix(in srgb,var(--color-ink) 7%,transparent);overflow:hidden;position:relative}
+.row .fl{height:100%;border-radius:12px;position:relative;animation:grow .62s var(--ease-spring) both}
+.row .fl::after{content:'';position:absolute;inset:0;border-radius:12px;background:var(--rim);opacity:.5}
+.row .vl{width:64px;font-family:var(--font-mono);font-weight:700;font-size:19px;font-variant-numeric:tabular-nums}
+@keyframes grow{from{width:0;opacity:.3}}
+.sw{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px}
+.ch{border-radius:var(--radius-lg);overflow:hidden;border:1px solid var(--color-border)}
+.ch .c{height:88px;position:relative}
+.ch .c::after{content:'';position:absolute;inset:0;background:var(--rim);opacity:.6}
+.ch .m{padding:11px 13px;background:var(--color-surface);font-size:11px}
+.ch .m b{display:block;font-size:13px;margin-bottom:3px;text-transform:capitalize}
+.ch .m span{color:var(--color-ink-subtle);font-family:var(--font-mono);font-size:10px}
+.btns{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+.b{border:none;border-radius:var(--radius-md);padding:13px 26px;font:inherit;font-size:15px;font-weight:600;cursor:pointer;
+  transition:transform .14s var(--ease-spring),box-shadow .22s var(--ease-standard)}
+.b:hover{transform:translateY(-2px)}
+.b:focus-visible{outline:none;box-shadow:var(--focus-ring)}
+.b.p{background:var(--accent-gradient);color:#fff;box-shadow:var(--accent-glow)}
+.b.s{background:var(--color-surface-raised);color:var(--color-ink);border:1px solid var(--color-border-strong)}
+.b.g{background:transparent;color:var(--color-ink-muted)}
+.stage{border-radius:var(--radius-xl);padding:72px 48px;text-align:center;container-type:inline-size;
+  background:var(--color-surface);border:1px solid var(--color-border);position:relative;overflow:hidden}
+.stage::before{content:'';position:absolute;inset:0;background:var(--canvas-image);opacity:.5}
+.stage>*{position:relative}
+.stage .q{font-size:clamp(32px,4.4cqw,80px);font-weight:680;letter-spacing:-.025em;line-height:1.1}
+.stage .code{font-family:var(--font-mono);font-size:clamp(40px,6.5cqw,110px);font-weight:700;letter-spacing:.1em;
+  background:var(--gradient-aurora);-webkit-background-clip:text;background-clip:text;color:transparent;margin-top:22px}
+.hr{height:1px;background:var(--hairline);margin:56px 0}
+</style></head><body data-theme=dark>
+<button class=toggle onclick="const n=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=n;document.body.dataset.theme=n;this.textContent=n==='dark'?'Light':'Dark'">Light</button>
+<div class=w>
+<div class=hero>
+  <div class=eyebrow>Design System</div>
+  <h1>Built from <em>materials</em>,<br>not flat colour.</h1>
+  <p class=lede>Glass with a rim highlight. Gradients that rotate hue instead of passing through grey. Series colours computed to separate in both themes.</p>
+</div>
 
-</style></head><body data-theme="dark">
-<button class="toggle" onclick="const r=document.documentElement,b=document.body;const n=r.dataset.theme===String('dark')?'light':'dark';r.dataset.theme=n;b.dataset.theme=n;this.textContent=n==='dark'?'Light mode':'Dark mode'">Light mode</button>
-<div class="wrap">
-<h1>Pulse Design System</h1><p class="sub">Every value below is generated from the token file. Nothing here is hand-written CSS.</p>
-<h2>Chart palette — computed for adjacent contrast</h2><div class="swatches">
-<div class="sw"><div class="chip" style="background:#6366f1;color:#07080c;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px">Series 1</div><div class="meta"><b>#6366f1</b><span>dark 4.48 / light 4.32</span></div></div>
-<div class="sw"><div class="chip" style="background:#65a30d;color:#07080c;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px">Series 2</div><div class="meta"><b>#65a30d</b><span>dark 6.48 / light 2.99</span></div></div>
-<div class="sw"><div class="chip" style="background:#7c3aed;color:#ffffff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px">Series 3</div><div class="meta"><b>#7c3aed</b><span>dark 3.51 / light 5.51</span></div></div>
-<div class="sw"><div class="chip" style="background:#10b981;color:#07080c;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px">Series 4</div><div class="meta"><b>#10b981</b><span>dark 7.89 / light 2.45</span></div></div>
-<div class="sw"><div class="chip" style="background:#e11d48;color:#ffffff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px">Series 5</div><div class="meta"><b>#e11d48</b><span>dark 4.26 / light 4.54</span></div></div>
-<div class="sw"><div class="chip" style="background:#0ea5e9;color:#07080c;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px">Series 6</div><div class="meta"><b>#0ea5e9</b><span>dark 7.22 / light 2.68</span></div></div>
-<div class="sw"><div class="chip" style="background:#ea580c;color:#07080c;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px">Series 7</div><div class="meta"><b>#ea580c</b><span>dark 5.62 / light 3.44</span></div></div>
-<div class="sw"><div class="chip" style="background:#9333ea;color:#ffffff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px">Series 8</div><div class="meta"><b>#9333ea</b><span>dark 3.72 / light 5.21</span></div></div>
-<div class="sw"><div class="chip" style="background:#16a34a;color:#07080c;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px">Series 9</div><div class="meta"><b>#16a34a</b><span>dark 6.07 / light 3.19</span></div></div>
-<div class="sw"><div class="chip" style="background:#db2777;color:#ffffff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px">Series 10</div><div class="meta"><b>#db2777</b><span>dark 4.35 / light 4.45</span></div></div>
-<div class="sw"><div class="chip" style="background:#d97706;color:#07080c;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px">Series 11</div><div class="meta"><b>#d97706</b><span>dark 6.28 / light 3.08</span></div></div>
-<div class="sw"><div class="chip" style="background:#c026d3;color:#ffffff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px">Series 12</div><div class="meta"><b>#c026d3</b><span>dark 4.25 / light 4.56</span></div></div>
+<h2>Live results — spring motion, gradient fills</h2>
+<div class="glass pad">
+<div class=row><div class=lb>Unclear goals</div><div class=tr><div class=fl style="width:100%;background:var(--gradient-data-1);box-shadow:var(--glow-data-1);animation-delay:0ms"></div></div><div class=vl>41%</div></div><div class=row><div class=lb>Too many tools</div><div class=tr><div class=fl style="width:65.85365853658537%;background:var(--gradient-data-2);box-shadow:var(--glow-data-2);animation-delay:38ms"></div></div><div class=vl>27%</div></div><div class=row><div class=lb>Slow reviews</div><div class=tr><div class=fl style="width:51.21951219512195%;background:var(--gradient-data-3);box-shadow:var(--glow-data-3);animation-delay:76ms"></div></div><div class=vl>21%</div></div><div class=row><div class=lb>Not enough time</div><div class=tr><div class=fl style="width:26.82926829268293%;background:var(--gradient-data-4);box-shadow:var(--glow-data-4);animation-delay:114ms"></div></div><div class=vl>11%</div></div>
 </div>
-<h2>Result chart — spring motion, staggered</h2><div class="bars">
-<div class="row"><div class="lb">Unclear goals</div><div class="tr"><div class="fl" style="width:100%;background:var(--color-data-1);animation-delay:0ms"></div></div><div class="vl">41%</div></div>
-<div class="row"><div class="lb">Too many tools</div><div class="tr"><div class="fl" style="width:65.85365853658537%;background:var(--color-data-2);animation-delay:38ms"></div></div><div class="vl">27%</div></div>
-<div class="row"><div class="lb">Slow reviews</div><div class="tr"><div class="fl" style="width:51.21951219512195%;background:var(--color-data-3);animation-delay:76ms"></div></div><div class="vl">21%</div></div>
-<div class="row"><div class="lb">Not enough time</div><div class="tr"><div class="fl" style="width:26.82926829268293%;background:var(--color-data-4);animation-delay:114ms"></div></div><div class="vl">11%</div></div>
+
+<h2>Series palette — different tone per theme</h2>
+<div class=sw>
+<div class=ch><div class=c style="background:var(--gradient-data-1)"></div><div class=m><b>iris</b><span>#8b84fc / #6d3fea</span></div></div><div class=ch><div class=c style="background:var(--gradient-data-2)"></div><div class=m><b>lime</b><span>#a3e635 / #3f6212</span></div></div><div class=ch><div class=c style="background:var(--gradient-data-3)"></div><div class=m><b>pink</b><span>#f472b6 / #db2777</span></div></div><div class=ch><div class=c style="background:var(--gradient-data-4)"></div><div class=m><b>jade</b><span>#34d399 / #065f46</span></div></div><div class=ch><div class=c style="background:var(--gradient-data-5)"></div><div class=m><b>rose</b><span>#fb7185 / #e11d48</span></div></div><div class=ch><div class=c style="background:var(--gradient-data-6)"></div><div class=m><b>teal</b><span>#2dd4bf / #115e59</span></div></div><div class=ch><div class=c style="background:var(--gradient-data-7)"></div><div class=m><b>fuchsia</b><span>#e879f9 / #c026d3</span></div></div><div class=ch><div class=c style="background:var(--gradient-data-8)"></div><div class=m><b>amber</b><span>#fbbf24 / #92400e</span></div></div><div class=ch><div class=c style="background:var(--gradient-data-9)"></div><div class=m><b>violet</b><span>#c084fc / #9333ea</span></div></div><div class=ch><div class=c style="background:var(--gradient-data-10)"></div><div class=m><b>ember</b><span>#fb923c / #9a3412</span></div></div><div class=ch><div class=c style="background:var(--gradient-data-11)"></div><div class=m><b>indigo</b><span>#818cf8 / #4f46e5</span></div></div><div class=ch><div class=c style="background:var(--gradient-data-12)"></div><div class=m><b>sky</b><span>#38bdf8 / #075985</span></div></div>
 </div>
-<h2>Presentation scale — fluid, container-relative</h2><div class="stage"><div class="p">What is blocking us most?</div><div class="c">4 8 2 9 1 6</div></div>
-<h2>Editor type scale</h2><div class="type">
-<div class="r"><div class="n">micro</div><div style="font-size:11px;line-height:16px;letter-spacing:0.02em;font-weight:500">The quick brown fox</div></div>
-<div class="r"><div class="n">caption</div><div style="font-size:12px;line-height:18px;letter-spacing:0.01em;font-weight:450">The quick brown fox</div></div>
-<div class="r"><div class="n">body</div><div style="font-size:15px;line-height:23px;letter-spacing:0;font-weight:450">The quick brown fox</div></div>
-<div class="r"><div class="n">bodyStrong</div><div style="font-size:15px;line-height:23px;letter-spacing:0;font-weight:600">The quick brown fox</div></div>
-<div class="r"><div class="n">title</div><div style="font-size:18px;line-height:26px;letter-spacing:-0.01em;font-weight:600">The quick brown fox</div></div>
-<div class="r"><div class="n">heading</div><div style="font-size:24px;line-height:32px;letter-spacing:-0.02em;font-weight:650">The quick brown fox</div></div>
-<div class="r"><div class="n">display</div><div style="font-size:34px;line-height:40px;letter-spacing:-0.03em;font-weight:700">The quick brown fox</div></div>
-</div>
-<h2>Controls</h2><div class="btns">
-<button class="btn pri">Present</button><button class="btn sec">Preview</button><button class="btn gho">Cancel</button>
-</div><div class="pills" style="margin-top:16px">
-<span class="pill" style="background:var(--color-positive);color:#07080c">positive</span>
-<span class="pill" style="background:var(--color-caution);color:#07080c">caution</span>
-<span class="pill" style="background:var(--color-danger);color:#07080c">danger</span>
-</div>
+
+<h2>Presentation stage</h2>
+<div class=stage><div class=q>What is blocking us most?</div><div class=code>4 8 2 9 1 6</div></div>
+
+<div class=hr></div>
+
+<h2>Controls</h2>
+<div class=btns><button class="b p">Present</button><button class="b s">Preview</button><button class="b g">Cancel</button></div>
 </div></body></html>

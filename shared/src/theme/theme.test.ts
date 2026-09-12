@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   palette,
+  series,
   darkRoles,
   lightRoles,
   stageType,
@@ -136,27 +137,42 @@ describe.each([
 /* ------------------------------------------------------------------ */
 
 describe('chart palette', () => {
-  it('every series is readable on a dark stage', () => {
-    for (const hex of palette.data) {
-      const ratio = contrastRatio(hex, darkRoles.canvas);
-      expect(ratio, `${hex} on dark canvas is ${ratio.toFixed(2)}`).toBeGreaterThanOrEqual(3);
+  it('every dark-theme tone is readable on the dark canvas', () => {
+    for (const s of series) {
+      const ratio = contrastRatio(s.dark, darkRoles.canvas);
+      expect(ratio, `${s.name} (${s.dark}) is ${ratio.toFixed(2)}`).toBeGreaterThanOrEqual(3);
     }
   });
 
-  it('every series is readable on a light stage', () => {
-    for (const hex of palette.data) {
-      const ratio = contrastRatio(hex, lightRoles.canvas);
-      expect(ratio, `${hex} on light canvas is ${ratio.toFixed(2)}`).toBeGreaterThanOrEqual(1.9);
+  it('every light-theme tone is readable on the light canvas', () => {
+    for (const s of series) {
+      const ratio = contrastRatio(s.light, lightRoles.canvas);
+      expect(ratio, `${s.name} (${s.light}) is ${ratio.toFixed(2)}`).toBeGreaterThanOrEqual(3);
     }
   });
 
-  it('adjacent series are distinguishable from each other', () => {
-    // Neighbouring bars sit side by side, so they must not read as one block.
-    for (let i = 0; i < palette.data.length - 1; i += 1) {
-      const a = palette.data[i]!;
-      const b = palette.data[i + 1]!;
-      const ratio = contrastRatio(a, b);
-      expect(ratio, `series ${i + 1} vs ${i + 2} is ${ratio.toFixed(2)}`).toBeGreaterThan(1.15);
+  it('adjacent series separate on the dark canvas', () => {
+    // Neighbouring bars sit side by side and must not read as one block.
+    for (let i = 1; i < series.length; i += 1) {
+      const ratio = contrastRatio(series[i - 1]!.dark, series[i]!.dark);
+      const label = `${series[i - 1]!.name} vs ${series[i]!.name}`;
+      expect(ratio, `${label} is ${ratio.toFixed(2)}`).toBeGreaterThan(1.15);
+    }
+  });
+
+  it('adjacent series separate on the light canvas', () => {
+    for (let i = 1; i < series.length; i += 1) {
+      const ratio = contrastRatio(series[i - 1]!.light, series[i]!.light);
+      const label = `${series[i - 1]!.name} vs ${series[i]!.name}`;
+      expect(ratio, `${label} is ${ratio.toFixed(2)}`).toBeGreaterThan(1.15);
+    }
+  });
+
+  it('gives every series a gradient and a glow for both themes', () => {
+    for (const s of series) {
+      expect(s.darkGradient, s.name).toMatch(/linear-gradient/);
+      expect(s.lightGradient, s.name).toMatch(/linear-gradient/);
+      expect(s.glow, s.name).toMatch(/rgba/);
     }
   });
 

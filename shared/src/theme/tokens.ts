@@ -16,6 +16,23 @@
  *    a single component.
  */
 
+import {
+  slate,
+  iris,
+  jade,
+  rose,
+  amber,
+  series,
+  gradients,
+  glass,
+  shadows,
+  glows,
+  canvasAuraDark,
+  canvasAuraLight,
+} from './palette.js';
+
+export * from './palette.js';
+
 /* ------------------------------------------------------------------ */
 /* Palette                                                             */
 /* ------------------------------------------------------------------ */
@@ -26,56 +43,40 @@
  * tell of an off-the-shelf template.
  */
 export const palette = {
-  // Neutrals, warm-shifted. 0 is near-black, 1000 is near-white.
+  /** Neutrals. Violet-shifted in shadow, warm in highlight. */
   ink: {
-    0: '#07080c',
-    50: '#0c0e14',
-    100: '#12151e',
-    200: '#1a1e29',
-    300: '#252a38',
-    400: '#39404f',
-    500: '#5a6274',
-    600: '#8a92a3',
-    700: '#b4bac6',
-    800: '#d7dbe3',
-    900: '#eef0f4',
-    1000: '#ffffff',
+    0: slate[1000],
+    50: slate[975],
+    100: slate[950],
+    200: slate[900],
+    300: slate[800],
+    400: slate[700],
+    500: slate[600],
+    600: slate[500],
+    700: slate[400],
+    800: slate[300],
+    900: slate[100],
+    1000: slate[25],
   },
 
-  // The signature accent: an electric indigo that survives a dim projector.
   indigo: {
-    300: '#a5b4ff',
-    400: '#818cf8',
-    500: '#6366f1',
-    600: '#4f46e5',
-    700: '#4338ca',
+    300: iris[300],
+    400: iris[400],
+    500: iris[500],
+    600: iris[600],
+    700: iris[700],
   },
 
-  // Result-chart palette.
-  //
-  // Not hand-picked by eye: this ordering is the output of a search that
-  // maximises luminance contrast AND hue distance between neighbouring
-  // series, subject to every colour staying readable on both the dark and
-  // the light canvas. The theme tests assert those properties, so a future
-  // "nicer" reordering cannot silently make two adjacent bars merge.
-  data: [
-    '#6366f1', // indigo
-    '#65a30d', // lime
-    '#7c3aed', // violet
-    '#10b981', // emerald
-    '#e11d48', // rose
-    '#0ea5e9', // sky
-    '#ea580c', // orange
-    '#9333ea', // purple
-    '#16a34a', // green
-    '#db2777', // pink
-    '#d97706', // amber
-    '#c026d3', // fuchsia
-  ],
+  /**
+   * Series colours as flat values, kept for the contrast tests and for any
+   * code that needs a single hex. The gradient-bearing versions live in
+   * `series`, exported from palette.ts.
+   */
+  data: series.map((s) => s.dark),
 
-  positive: { base: '#10b981', soft: '#064e3b' },
-  caution: { base: '#f59e0b', soft: '#451a03' },
-  danger: { base: '#f43f5e', soft: '#4c0519' },
+  positive: { base: jade[500], soft: '#043d2e' },
+  caution: { base: amber[500], soft: '#422006' },
+  danger: { base: rose[500], soft: '#4c0519' },
 } as const;
 
 /* ------------------------------------------------------------------ */
@@ -109,6 +110,26 @@ export interface ColorRoles {
   danger: string;
   /** Focus ring. Must be visible on every surface in the theme. */
   focus: string;
+}
+
+/** The material layer: gradients, glass and glow, per theme. */
+export interface Materials {
+  /** The full page background, including aura washes. */
+  canvasImage: string;
+  /** Primary action gradient. */
+  accentGradient: string;
+  /** Frosted panel treatment. */
+  glassBackground: string;
+  glassBlur: string;
+  glassBorder: string;
+  glassShadow: string;
+  /** Bright rim along the top edge of a raised surface. */
+  rim: string;
+  /** A divider that fades at both ends. */
+  hairline: string;
+  /** Accent glow, used on focus and on active controls. */
+  accentGlow: string;
+  focusRing: string;
 }
 
 export const darkRoles: ColorRoles = {
@@ -147,6 +168,32 @@ export const lightRoles: ColorRoles = {
   caution: '#b45309',
   danger: '#e11d48',
   focus: palette.indigo[600],
+};
+
+export const darkMaterials: Materials = {
+  canvasImage: canvasAuraDark,
+  accentGradient: gradients.iris,
+  glassBackground: glass.dark.background,
+  glassBlur: glass.dark.backdropFilter,
+  glassBorder: glass.dark.border,
+  glassShadow: glass.dark.boxShadow,
+  rim: gradients.rimDark,
+  hairline: gradients.hairlineDark,
+  accentGlow: glows.iris,
+  focusRing: glows.focus,
+};
+
+export const lightMaterials: Materials = {
+  canvasImage: canvasAuraLight,
+  accentGradient: gradients.iris,
+  glassBackground: glass.light.background,
+  glassBlur: glass.light.backdropFilter,
+  glassBorder: glass.light.border,
+  glassShadow: glass.light.boxShadow,
+  rim: gradients.rimLight,
+  hairline: gradients.hairlineLight,
+  accentGlow: glows.iris,
+  focusRing: glows.focusLight,
 };
 
 /* ------------------------------------------------------------------ */
@@ -255,10 +302,20 @@ export const radius = {
  */
 export const elevation = {
   none: 'none',
-  sm: '0 1px 2px rgba(7, 8, 12, 0.32)',
-  md: '0 4px 12px -2px rgba(7, 8, 12, 0.40), 0 2px 4px -2px rgba(7, 8, 12, 0.30)',
-  lg: '0 12px 32px -8px rgba(7, 8, 12, 0.50), 0 4px 12px -4px rgba(7, 8, 12, 0.35)',
-  glow: '0 0 0 1px rgba(99, 102, 241, 0.30), 0 8px 28px -6px rgba(99, 102, 241, 0.35)',
+  sm: shadows.dark.sm,
+  md: shadows.dark.md,
+  lg: shadows.dark.lg,
+  xl: shadows.dark.xl,
+  glow: glows.iris,
+} as const;
+
+export const elevationLight = {
+  none: 'none',
+  sm: shadows.light.sm,
+  md: shadows.light.md,
+  lg: shadows.light.lg,
+  xl: shadows.light.xl,
+  glow: glows.iris,
 } as const;
 
 /**
@@ -326,14 +383,31 @@ export const layers = {
 const toKebab = (s: string) => s.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
 
 /** Turns a set of colour roles into CSS custom properties. */
-export function rolesToCssVars(roles: ColorRoles): Record<string, string> {
+export function rolesToCssVars(roles: ColorRoles, materials?: Materials): Record<string, string> {
   const out: Record<string, string> = {};
+
   for (const key of Object.keys(roles) as (keyof ColorRoles)[]) {
     out[`--color-${toKebab(key)}`] = roles[key];
   }
-  palette.data.forEach((hex: string, i: number) => {
-    out[`--color-data-${i + 1}`] = hex;
+
+  // Each series gets three variables: a flat colour, a gradient for the
+  // filled shape, and a glow for when it is the focused or winning series.
+  // Series colours differ per theme: a bright tone reads on the dark canvas,
+  // a deep tone reads on the light one. Emitting the right tone here means
+  // charts need no theme awareness of their own.
+  const isLight = roles.canvas !== darkRoles.canvas;
+  series.forEach((s, i) => {
+    out[`--color-data-${i + 1}`] = isLight ? s.light : s.dark;
+    out[`--gradient-data-${i + 1}`] = isLight ? s.lightGradient : s.darkGradient;
+    out[`--glow-data-${i + 1}`] = s.glow;
   });
+
+  if (materials) {
+    for (const key of Object.keys(materials) as (keyof Materials)[]) {
+      out[`--${toKebab(key)}`] = materials[key];
+    }
+  }
+
   return out;
 }
 
@@ -351,6 +425,15 @@ export function staticCssVars(): Record<string, string> {
   for (const [k, v] of Object.entries(motion.duration)) out[`--duration-${k}`] = v;
   for (const [k, v] of Object.entries(motion.ease)) out[`--ease-${k}`] = v;
   for (const [k, v] of Object.entries(layers)) out[`--layer-${k}`] = String(v);
+
+  // Brand gradients, available to any component without importing JS.
+  out['--gradient-iris'] = gradients.iris;
+  out['--gradient-aurora'] = gradients.aurora;
+  out['--gradient-ember'] = gradients.ember;
+  out['--gradient-jade'] = gradients.jade;
+  out['--gradient-rose'] = gradients.rose;
+  out['--gradient-sheen'] = gradients.sheen;
+
   return out;
 }
 
