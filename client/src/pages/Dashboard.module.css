@@ -1,4 +1,6 @@
 .page {
+  display: flex;
+  flex-direction: column;
   min-height: 100dvh;
 }
 
@@ -172,9 +174,23 @@
 /* ---------------- main ---------------- */
 
 .main {
-  max-width: 1080px;
+  /* Wide enough for four deck cards on a large display, still comfortable
+     to read on a laptop. */
+  width: 100%;
+  max-width: 1440px;
   margin: 0 auto;
-  padding: var(--space-3xl) var(--space-2xl);
+  padding: var(--space-3xl) var(--space-2xl) var(--space-2xl);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Carries the flex growth down to the empty state so it can centre in the
+   space that is actually left, rather than sitting under the title. */
+.content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 .titleRow {
@@ -223,10 +239,16 @@
 /* ---------------- empty state ---------------- */
 
 .empty {
-  display: grid;
-  justify-items: center;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   text-align: center;
   padding: var(--space-5xl) var(--space-2xl);
+  /* Keeps the card from collapsing to the text height on a short window,
+     and from becoming a vast empty field on a tall one. */
+  min-height: 380px;
 }
 
 .emptyMark {

@@ -13,6 +13,10 @@ import styles from './Dashboard.module.css';
 export function Dashboard() {
   const user = useAuth((s) => s.user);
   const signOut = useAuth((s) => s.signOut);
+  // Google's avatar CDN sometimes refuses a request, and a broken <img>
+  // renders as an empty box with an icon. Fall back to the initials badge
+  // that already exists for users with no picture at all.
+  const [avatarFailed, setAvatarFailed] = useState(false);
   const [theme, setTheme] = useState<'dark' | 'light'>(
     () => (document.documentElement.dataset.theme as 'dark' | 'light' | undefined) ?? 'dark',
   );
@@ -53,8 +57,17 @@ export function Dashboard() {
           <DropdownMenu.Root>
             <DropdownMenu.Trigger asChild>
               <button type="button" className={styles.accountButton}>
-                {user?.avatarUrl ? (
-                  <img src={user.avatarUrl} alt="" className={styles.avatar} />
+                {user?.avatarUrl && !avatarFailed ? (
+                  <img
+                    src={user.avatarUrl}
+                    alt=""
+                    className={styles.avatar}
+                    // Google returns 403 for requests carrying a full referrer.
+                    referrerPolicy="no-referrer"
+                    onError={() => {
+                      setAvatarFailed(true);
+                    }}
+                  />
                 ) : (
                   <span className={styles.avatarFallback} aria-hidden="true">
                     {initials}
@@ -99,6 +112,7 @@ export function Dashboard() {
 
       <main className={styles.main}>
         <motion.div
+          className={styles.content}
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45, ease: [0, 0, 0.2, 1] }}

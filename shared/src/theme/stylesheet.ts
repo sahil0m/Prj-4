@@ -119,6 +119,36 @@ button {
   cursor: pointer;
 }
 
+/*
+ * The browser default is a flat blue block that looks like an unstyled
+ * document. Tint it with the brand accent instead, so dragging across the
+ * page still looks like the product.
+ */
+::selection {
+  background: color-mix(in srgb, var(--color-accent) 34%, transparent);
+  color: var(--color-ink);
+}
+
+/*
+ * Chrome — buttons, labels, headings that act as furniture — should not
+ * select when a user drags across the page or double-clicks a control.
+ * Content the user might genuinely want to copy (their own text, results,
+ * join codes) opts back in with .selectable.
+ */
+button,
+label,
+[role='button'],
+[role='tab'],
+[role='menuitem'] {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.selectable {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
 h1,
 h2,
 h3,
