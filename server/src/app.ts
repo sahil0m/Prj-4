@@ -8,6 +8,7 @@ import { allowedOrigins, isProduction } from './config.js';
 import { logger } from './lib/logger.js';
 import { pingDb } from './lib/db.js';
 import { authRoutes } from './routes/auth.js';
+import { deckRoutes } from './routes/decks.js';
 
 /**
  * Builds the Express application.
@@ -107,6 +108,7 @@ export function createApp(): Express {
   /* ---------------- routes ---------------- */
 
   app.use('/api/auth', authRoutes());
+  app.use('/api/decks', deckRoutes());
 
   /* ---------------- 404 ---------------- */
 

@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "db:ping": "tsx src/scripts/ping.ts",
     "db:verify": "tsx src/scripts/verify-models.ts",
-    "auth:verify": "tsx src/scripts/verify-auth.ts"
+    "auth:verify": "tsx src/scripts/verify-auth.ts",
+    "decks:verify": "tsx src/scripts/verify-decks.ts"
   },
   "dependencies": {
     "@pulse/shared": "*",
