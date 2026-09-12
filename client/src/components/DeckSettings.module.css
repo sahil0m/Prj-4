@@ -1,0 +1,246 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--layer-overlay);
+  background: rgba(4, 6, 16, 0.62);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  animation: fade 0.18s var(--ease-enter);
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+.content {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: var(--layer-modal);
+  display: flex;
+  flex-direction: column;
+  width: min(520px, calc(100vw - 32px));
+  max-height: min(720px, calc(100dvh - 48px));
+  transform: translate(-50%, -50%);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--elevation-xl);
+  animation: pop 0.2s var(--ease-enter);
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -48%) scale(0.97);
+  }
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: none;
+  padding: var(--space-xl) var(--space-xl) var(--space-lg);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.title {
+  font-size: 18px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.close {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  color: var(--color-ink-subtle);
+}
+
+.close:hover {
+  color: var(--color-ink);
+  background: color-mix(in srgb, var(--color-ink) 8%, transparent);
+}
+
+.body {
+  flex: 1;
+  overflow-y: auto;
+  display: grid;
+  gap: var(--space-xl);
+  padding: var(--space-xl);
+}
+
+.section {
+  display: grid;
+  gap: var(--space-md);
+}
+
+.sectionTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--color-ink-subtle);
+}
+
+.sectionTitle svg {
+  color: var(--color-accent);
+}
+
+/* ---------------- themes ---------------- */
+
+.themes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(88px, 1fr));
+  gap: 8px;
+}
+
+.theme {
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+  padding: 10px 8px;
+  border-radius: var(--radius-md);
+  border: 2px solid transparent;
+  background: color-mix(in srgb, var(--color-ink) 4%, transparent);
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-spring);
+}
+
+.theme:hover {
+  transform: translateY(-1px);
+}
+
+.theme[data-active='true'] {
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+}
+
+/* The swatch shows the actual accent against the actual canvas, so the
+   choice is made from what it will look like rather than from a name. */
+.themeSwatch {
+  width: 100%;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--color-ink) 12%, transparent);
+}
+
+.themeLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-ink-muted);
+}
+
+/* ---------------- toggles ---------------- */
+
+.toggleRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.toggleRow > *:first-child {
+  flex: 1;
+}
+
+/* A little more space under a toggle that carries an explanation, so the
+   hint reads as belonging to it rather than to the next one. */
+.toggleWithHint {
+  padding-bottom: 2px;
+}
+
+/* ---------------- actions ---------------- */
+
+.actions {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.action {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 14px;
+  border-radius: var(--radius-md);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-ink-muted);
+  border: 1px solid var(--color-border);
+  transition:
+    color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
+}
+
+.action:hover {
+  color: var(--color-ink);
+  border-color: var(--color-border-strong);
+}
+
+.actionDanger:hover {
+  color: var(--color-danger);
+  border-color: color-mix(in srgb, var(--color-danger) 45%, transparent);
+}
+
+/* ---------------- confirm ---------------- */
+
+.confirm {
+  display: grid;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-danger) 9%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-danger) 30%, transparent);
+  animation: slideIn 0.18s var(--ease-enter);
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+.confirmText {
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--color-ink-muted);
+}
+
+.confirmActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+}
+
+.confirmDelete {
+  padding: 9px 16px;
+  border-radius: var(--radius-md);
+  font-size: 13.5px;
+  font-weight: 650;
+  color: #fff;
+  background: var(--color-danger);
+}
+
+.confirmDelete:hover {
+  filter: brightness(1.08);
+}
+
+.spin {
+  animation: spin 0.9s linear infinite;
+  color: var(--color-ink-subtle);
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

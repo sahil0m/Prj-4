@@ -186,7 +186,7 @@ export async function duplicateDeck(deckId: string, ownerId: string): Promise<De
       position: slide.position,
       config: structuredClone(slide.config) as SlideConfig,
     })),
-    theme: { ...source.theme },
+    theme: plainTheme(source.theme),
     settings: source.settings,
     tags: source.tags,
   });
@@ -221,6 +221,19 @@ export function validateConfig(kind: SlideKind, config: unknown): SlideConfig {
 function titleOrDefault(title: string | undefined): string {
   const trimmed = title?.trim() ?? '';
   return trimmed.length > 0 ? trimmed : 'Untitled deck';
+}
+
+/**
+ * A theme as plain values.
+ *
+ * Mongoose types this path as a plain object but returns a subdocument at
+ * runtime, so spreading it copies internals like $__parent — which put the
+ * entire parent document into every API response — while toObject is not on
+ * the declared type. This handles whichever it actually is.
+ */
+function plainTheme(theme: DeckDoc['theme']): DeckDoc['theme'] {
+  const candidate = theme as { toObject?: () => DeckDoc['theme'] };
+  return typeof candidate.toObject === 'function' ? candidate.toObject() : { ...theme };
 }
 
 /** Slide ids are generated server-side on insert and never reused. */
@@ -471,7 +484,7 @@ export function toPublicDeck(deck: DeckDoc): PublicDeck {
         position: s.position,
         config: s.config,
       })),
-    theme: { ...deck.theme },
+    theme: plainTheme(deck.theme),
     settings: deck.settings,
     revision: deck.revision,
     archived: deck.archivedAt !== null,

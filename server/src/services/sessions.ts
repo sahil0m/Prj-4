@@ -59,6 +59,17 @@ async function allocateJoinCode(): Promise<string> {
   throw new HttpError(503, 'Too many sessions are running. Try again shortly.', 'no_join_code');
 }
 
+/**
+ * A subdocument as plain values.
+ *
+ * Mongoose types these paths as plain objects but returns subdocuments at
+ * runtime, so a spread copies internal fields instead of the data.
+ */
+function toPlain<T>(value: T): T {
+  const candidate = value as { toObject?: () => T };
+  return typeof candidate.toObject === 'function' ? candidate.toObject() : { ...value };
+}
+
 /** Permanent and never reissued, so it is safe on a printed handout. */
 function newJoinSlug(): string {
   return randomBytes(8)
@@ -113,7 +124,10 @@ export async function startSession(deckId: string, ownerId: string): Promise<Ses
     deckSnapshot: {
       title: deck.title,
       slides: ordered,
-      theme: { ...deck.theme },
+      // toObject, not a spread: spreading a Mongoose subdocument stores its
+      // internals rather than its values, which froze a useless theme into
+      // every snapshot.
+      theme: toPlain(deck.theme),
       settings: deck.settings,
     },
     currentSlideId: ordered[0]?.id ?? null,
@@ -181,6 +195,8 @@ interface Snapshot {
   title: string;
   slides: SnapshotSlide[];
   settings?: Record<string, unknown>;
+  /** Frozen with the deck, so a later theme change cannot alter a past run. */
+  theme?: Record<string, unknown>;
 }
 
 export function snapshotOf(session: SessionDoc): Snapshot {

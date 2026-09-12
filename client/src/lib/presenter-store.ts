@@ -44,6 +44,8 @@ export interface PresenterSession {
   joinUrl: string;
   joinLink: string;
   state: string;
+  /** Chosen in the editor; drives the accent the room sees. */
+  theme?: { preset?: string; accent?: string; mode?: string };
   currentSlideId: string | null;
 }
 

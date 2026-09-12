@@ -15,6 +15,7 @@ import {
   AlertCircle,
   Presentation,
   Sparkles,
+  Settings2,
 } from 'lucide-react';
 import { definitionFor, type SlideKind } from '@pulse/shared';
 import { api, ApiError } from '../lib/api';
@@ -23,6 +24,7 @@ import { useDeck, useSelectedSlide } from '../lib/deck-store';
 import { SlidePicker } from '../components/SlidePicker';
 import { SlideForm } from '../components/SlideForm';
 import { SlideRail } from '../components/SlideRail';
+import { DeckSettings, useDeckSettings } from '../components/DeckSettings';
 import { SlideIcon } from '../components/SlideIcon';
 import { AiPanel, useAiAvailable, ImproveButton } from '../components/AiPanel';
 import { Splash } from '../components/Splash';
@@ -51,9 +53,17 @@ export function DeckEditor() {
   const moveSlide = useDeck((s) => s.moveSlide);
 
   const slide = useSelectedSlide();
+
+  // Settings write straight through and reload, because they change how the
+  // deck behaves rather than what it contains; a debounce would leave the
+  // dialog showing one thing while the deck did another.
+  const { save: saveSettings } = useDeckSettings(deckId ?? '', () => {
+    if (deckId) void load(deckId);
+  });
   const [pickerOpen, setPickerOpen] = useState(false);
   const [starting, setStarting] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const aiAvailable = useAiAvailable();
 
   /**
@@ -80,6 +90,51 @@ export function DeckEditor() {
       setStarting(false);
     }
   };
+
+  /**
+   * Editor shortcuts.
+   *
+   * Every one needs a modifier: this screen is full of text fields, and a
+   * bare letter would fire while someone types a question.
+   */
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const mod = event.metaKey || event.ctrlKey;
+      if (!mod) return;
+
+      switch (event.key.toLowerCase()) {
+        case 'enter':
+          event.preventDefault();
+          void present();
+          break;
+        case 'k':
+          // Reserved for the command palette on the dashboard; here it adds
+          // a slide, which is the equivalent "what do I want next" action.
+          break;
+        case 'd':
+          if (slide) {
+            event.preventDefault();
+            void duplicateSlide(slide.id);
+          }
+          break;
+        case ',':
+          event.preventDefault();
+          setSettingsOpen(true);
+          break;
+        default:
+          break;
+      }
+    };
+
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+    };
+    // Deliberately re-subscribed on every render: the handler closes over
+    // the selected slide and the present function, and a stale closure
+    // would duplicate whichever slide was selected when the editor opened.
+    // The cleanup above makes this correct rather than leaky.
+  });
 
   useEffect(() => {
     if (deckId) void load(deckId);
@@ -141,6 +196,19 @@ export function DeckEditor() {
 
         <div className={styles.headerRight}>
           <SaveIndicator />
+
+          <button
+            type="button"
+            className={styles.iconButton}
+            onClick={() => {
+              setSettingsOpen(true);
+            }}
+            title="Deck settings"
+            aria-label="Deck settings"
+          >
+            <Settings2 size={18} />
+          </button>
+
           <button
             type="button"
             className={styles.presentButton}
@@ -338,6 +406,36 @@ export function DeckEditor() {
         onOpenChange={setPickerOpen}
         onPick={(kind: SlideKind) => {
           void addSlide(kind, selectedId ?? undefined);
+        }}
+      />
+
+      <DeckSettings
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        deck={deck}
+        onSave={saveSettings}
+        onDuplicate={() => {
+          void (async () => {
+            try {
+              const result = await api.duplicateDeck(deck.id);
+              toast.success('Deck duplicated');
+              setSettingsOpen(false);
+              await navigate(`/decks/${result.deck.id}`);
+            } catch {
+              toast.error('That deck could not be duplicated.');
+            }
+          })();
+        }}
+        onDelete={() => {
+          void (async () => {
+            try {
+              await api.deleteDeck(deck.id);
+              toast.success('Deck deleted');
+              await navigate('/');
+            } catch {
+              toast.error('That deck could not be deleted.');
+            }
+          })();
         }}
       />
 

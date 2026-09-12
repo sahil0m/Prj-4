@@ -183,8 +183,25 @@ export function Presenter() {
   // this tab may be on localhost, which no other device can reach.
   const joinUrl = session.joinUrl.replace(/^https?:\/\//, '');
 
+  // The deck's own accent, applied as a variable override rather than a
+  // class: every component below already reads --color-accent, so nothing
+  // needs to know a theme exists.
+  const accent = typeof session.theme?.accent === 'string' ? session.theme.accent : null;
+
   return (
-    <div className={styles.page} data-fullscreen={fullscreen}>
+    <div
+      className={styles.page}
+      data-fullscreen={fullscreen}
+      style={
+        accent === null
+          ? undefined
+          : ({
+              '--color-accent': accent,
+              '--accent-gradient': `linear-gradient(135deg, ${accent}, color-mix(in srgb, ${accent} 55%, #000))`,
+              '--accent-glow': `0 8px 28px color-mix(in srgb, ${accent} 35%, transparent)`,
+            } as React.CSSProperties)
+      }
+    >
       {/* ---------------- top bar ---------------- */}
       <header className={styles.top}>
         <div className={styles.joinInfo}>

@@ -246,6 +246,9 @@ function toPublicSession(session: Awaited<ReturnType<typeof sessions.startSessio
     // browser: the presenter's machine knows its address, but the tab
     // showing this page may have been opened on localhost, which is not
     // reachable from anyone else's phone.
+    // The deck's theme travels with the session, so the presenter view
+    // shows the accent the author chose rather than the default.
+    theme: sessions.snapshotOf(session).theme,
     joinUrl: env.JOIN_ORIGIN,
     joinLink: `${env.JOIN_ORIGIN}/?code=${session.joinCode}`,
     state: session.state,
