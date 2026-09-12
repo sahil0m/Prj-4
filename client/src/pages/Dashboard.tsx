@@ -15,6 +15,7 @@ import {
   MoreVertical,
   Loader2,
   Sparkles,
+  Search,
   Shield,
   History as HistoryIcon,
 } from 'lucide-react';
@@ -23,6 +24,7 @@ import { useAuth } from '../lib/auth-store';
 import { api, ApiError, type DeckSummary } from '../lib/api';
 import { SlideIcon } from '../components/SlideIcon';
 import { AiPanel, useAiAvailable } from '../components/AiPanel';
+import { CommandMenu, CommandHint } from '../components/CommandMenu';
 import { definitionFor } from '@pulse/shared';
 import styles from './Dashboard.module.css';
 
@@ -119,6 +121,25 @@ export function Dashboard() {
         </div>
 
         <div className={styles.headerActions}>
+          {/* Tells people the palette exists; hidden on touch devices,
+              where there is no keyboard to press. */}
+          <button
+            type="button"
+            className={styles.commandButton}
+            onClick={() => {
+              // Synthesised rather than lifting the dialog's state up: the
+              // menu owns its own open state and listens for this.
+              document.dispatchEvent(
+                new KeyboardEvent('keydown', { key: 'k', metaKey: true, ctrlKey: true }),
+              );
+            }}
+            title="Search and commands"
+          >
+            <Search size={15} />
+            <span className={styles.commandLabel}>Search</span>
+            <CommandHint />
+          </button>
+
           <button
             type="button"
             className={styles.iconButton}
@@ -316,6 +337,20 @@ export function Dashboard() {
           )}
         </motion.div>
       </main>
+
+      {/* Reachable from anywhere on this page with Cmd+K. */}
+      <CommandMenu
+        onCreateDeck={() => {
+          void createDeck();
+        }}
+        onOpenAi={
+          aiAvailable
+            ? () => {
+                setAiOpen(true);
+              }
+            : undefined
+        }
+      />
 
       <AiPanel
         open={aiOpen}

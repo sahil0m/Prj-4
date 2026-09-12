@@ -10,6 +10,7 @@ import { Admin } from './pages/Admin';
 import { Settings } from './pages/Settings';
 import { History } from './pages/History';
 import { Splash } from './components/Splash';
+import { TooltipProvider } from './components/Controls';
 
 /**
  * Restores the session once on load, then routes.
@@ -95,7 +96,10 @@ function OAuthComplete() {
 export function App() {
   return (
     <BrowserRouter>
-      <Shell />
+      {/* One provider for the whole app, so individual tooltips need none. */}
+      <TooltipProvider>
+        <Shell />
+      </TooltipProvider>
       <Toaster
         position="bottom-right"
         toastOptions={{

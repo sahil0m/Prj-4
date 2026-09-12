@@ -1,0 +1,123 @@
+.list {
+  flex: 1;
+  overflow-y: auto;
+  list-style: none;
+  padding: 0 var(--space-sm);
+  margin: 0;
+  display: grid;
+  gap: 3px;
+  align-content: start;
+}
+
+.item {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  border-radius: var(--radius-md);
+  /* Lifted while dragging, so it reads as being held above the list. */
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+
+.item[data-dragging='true'] {
+  z-index: 1;
+  opacity: 0.9;
+  box-shadow: var(--elevation-lg);
+}
+
+/* Hidden until the row is hovered or the handle is focused: a column of
+   grip dots is visual noise in a list someone is reading. */
+.handle {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 18px;
+  border-radius: var(--radius-sm);
+  color: var(--color-ink-subtle);
+  cursor: grab;
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-standard);
+  touch-action: none;
+}
+
+.item:hover .handle,
+.handle:focus-visible {
+  opacity: 1;
+}
+
+.handle:active {
+  cursor: grabbing;
+}
+
+.body {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: 1;
+  min-width: 0;
+  padding: 9px 10px;
+  text-align: left;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  transition:
+    background var(--duration-instant) var(--ease-standard),
+    border-color var(--duration-instant) var(--ease-standard);
+}
+
+.body:hover {
+  background: color-mix(in srgb, var(--color-ink) 6%, transparent);
+}
+
+.body[data-selected='true'] {
+  background: color-mix(in srgb, var(--color-accent) 15%, transparent);
+  border-color: color-mix(in srgb, var(--color-accent) 45%, transparent);
+}
+
+.number {
+  flex: none;
+  width: 16px;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-ink-subtle);
+}
+
+.icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 14%, transparent);
+}
+
+.text {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.prompt {
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--color-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kind {
+  font-size: 11px;
+  color: var(--color-ink-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Touch devices have no hover, so the handle must always be reachable. */
+@media (hover: none) {
+  .handle {
+    opacity: 1;
+  }
+}

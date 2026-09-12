@@ -1,0 +1,271 @@
+/*
+ * Radix primitives, styled.
+ *
+ * Every one exposes its state through data attributes rather than classes,
+ * which is why the selectors here read as [data-state='checked'] and so on.
+ */
+
+.field {
+  display: grid;
+  gap: 7px;
+}
+
+.label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-ink-muted);
+}
+
+.hint {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--color-ink-subtle);
+}
+
+/* ---------------- switch ---------------- */
+
+.toggleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-lg);
+}
+
+.toggleText {
+  display: grid;
+  gap: 2px;
+  cursor: pointer;
+}
+
+.switchRoot {
+  position: relative;
+  flex: none;
+  width: 40px;
+  height: 23px;
+  padding: 0;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--color-ink) 16%, transparent);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard);
+}
+
+.switchRoot[data-state='checked'] {
+  background: var(--color-accent);
+}
+
+.switchRoot:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.switchThumb {
+  display: block;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transform: translateX(3px);
+  /* A spring rather than a linear slide: the thumb should feel like an
+     object with weight, which is what makes a toggle satisfying. */
+  transition: transform 0.18s var(--ease-spring);
+  will-change: transform;
+}
+
+.switchThumb[data-state='checked'] {
+  transform: translateX(20px);
+}
+
+/* ---------------- slider ---------------- */
+
+.rangeHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.rangeValue {
+  font-size: 13px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-accent);
+}
+
+.sliderRoot {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 20px;
+  touch-action: none;
+  user-select: none;
+  cursor: pointer;
+}
+
+.sliderTrack {
+  position: relative;
+  flex: 1;
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--color-ink) 14%, transparent);
+}
+
+.sliderRange {
+  position: absolute;
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--accent-gradient);
+}
+
+.sliderThumb {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow:
+    0 1px 4px rgba(0, 0, 0, 0.35),
+    0 0 0 1px color-mix(in srgb, var(--color-accent) 40%, transparent);
+  cursor: grab;
+  transition: transform var(--duration-fast) var(--ease-spring);
+}
+
+.sliderThumb:hover {
+  transform: scale(1.12);
+}
+
+.sliderThumb:active {
+  cursor: grabbing;
+  transform: scale(1.05);
+}
+
+.sliderThumb:focus-visible {
+  outline: none;
+  box-shadow:
+    0 1px 4px rgba(0, 0, 0, 0.35),
+    0 0 0 4px color-mix(in srgb, var(--color-accent) 35%, transparent);
+}
+
+/* ---------------- select ---------------- */
+
+.selectTrigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  width: 100%;
+  padding: 9px 11px;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  text-align: left;
+  color: var(--color-ink);
+  background: color-mix(in srgb, var(--color-ink) 5%, transparent);
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+  transition: border-color var(--duration-fast) var(--ease-standard);
+}
+
+.selectTrigger:hover {
+  border-color: var(--color-border-strong);
+}
+
+.selectTrigger:focus-visible {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 20%, transparent);
+}
+
+.selectTrigger svg {
+  color: var(--color-ink-subtle);
+}
+
+.selectContent {
+  z-index: var(--layer-popover);
+  min-width: var(--radix-select-trigger-width);
+  max-height: var(--radix-select-content-available-height);
+  padding: 5px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--elevation-lg);
+  animation: dropIn 0.14s var(--ease-enter);
+}
+
+@keyframes dropIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+.selectViewport {
+  display: grid;
+  gap: 1px;
+}
+
+.selectItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  color: var(--color-ink-muted);
+  cursor: pointer;
+  outline: none;
+  user-select: none;
+}
+
+.selectItem[data-highlighted] {
+  color: var(--color-ink);
+  background: color-mix(in srgb, var(--color-accent) 15%, transparent);
+}
+
+.selectIndicator {
+  display: grid;
+  place-items: center;
+  color: var(--color-accent);
+}
+
+/* ---------------- tooltip ---------------- */
+
+.tooltip {
+  z-index: var(--layer-tooltip, 60);
+  max-width: 260px;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--color-ink);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-strong);
+  box-shadow: var(--elevation-lg);
+  animation: tipIn 0.12s var(--ease-enter);
+}
+
+@keyframes tipIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+.tooltipArrow {
+  fill: var(--color-surface-raised);
+}
+
+.infoButton {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  color: var(--color-ink-subtle);
+  transition: color var(--duration-fast) var(--ease-standard);
+}
+
+.infoButton:hover {
+  color: var(--color-accent);
+}

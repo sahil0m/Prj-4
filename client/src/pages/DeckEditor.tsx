@@ -22,6 +22,7 @@ import { toast } from 'sonner';
 import { useDeck, useSelectedSlide } from '../lib/deck-store';
 import { SlidePicker } from '../components/SlidePicker';
 import { SlideForm } from '../components/SlideForm';
+import { SlideRail } from '../components/SlideRail';
 import { SlideIcon } from '../components/SlideIcon';
 import { AiPanel, useAiAvailable, ImproveButton } from '../components/AiPanel';
 import { Splash } from '../components/Splash';
@@ -164,36 +165,14 @@ export function DeckEditor() {
             </span>
           </div>
 
-          <ol className={styles.slideList}>
-            {deck.slides.map((item, i) => {
-              const definition = definitionFor(item.kind);
-              const prompt = (item.config as { prompt?: string }).prompt;
-
-              return (
-                <li key={item.id}>
-                  <button
-                    type="button"
-                    className={styles.slideItem}
-                    data-selected={item.id === selectedId}
-                    onClick={() => {
-                      select(item.id);
-                    }}
-                  >
-                    <span className={styles.slideNumber}>{i + 1}</span>
-                    <span className={styles.slideIcon} aria-hidden="true">
-                      <SlideIcon name={definition.icon} size={14} />
-                    </span>
-                    <span className={styles.slideText}>
-                      <span className={styles.slidePrompt}>
-                        {prompt?.trim() ? prompt : definition.label}
-                      </span>
-                      <span className={styles.slideKind}>{definition.label}</span>
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ol>
+          <SlideRail
+            slides={deck.slides}
+            selectedId={selectedId}
+            onSelect={select}
+            onReorder={(slideId, toIndex) => {
+              void moveSlide(slideId, toIndex);
+            }}
+          />
 
           <div className={styles.railActions}>
             <button

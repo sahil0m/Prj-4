@@ -1,6 +1,7 @@
 import { useId } from 'react';
 import { Plus, Trash2, GripVertical, Check } from 'lucide-react';
 import { fieldsFor, definitionFor, type FieldSpec, type SlideKind } from '@pulse/shared';
+import { Toggle, Range, Choice } from './Controls';
 import styles from './SlideForm.module.css';
 
 type Config = Record<string, unknown>;
@@ -78,24 +79,55 @@ function Field({
 
   if (field.kind === 'boolean') {
     return (
-      <label className={styles.toggleRow} htmlFor={id}>
-        <span className={styles.toggleText}>
-          <span className={styles.label}>{field.label}</span>
-          {field.hint && <span className={styles.hint}>{field.hint}</span>}
-        </span>
-        <span className={styles.switch} data-on={value === true}>
-          <input
-            id={id}
-            type="checkbox"
-            className={styles.switchInput}
-            checked={value === true}
-            onChange={(e) => {
-              onChange({ [field.name]: e.target.checked });
-            }}
-          />
-          <span className={styles.switchKnob} />
-        </span>
-      </label>
+      <Toggle
+        id={id}
+        checked={value === true}
+        label={field.label}
+        hint={field.hint}
+        onChange={(checked) => {
+          onChange({ [field.name]: checked });
+        }}
+      />
+    );
+  }
+
+  // A bounded number is a slider rather than a text field: dragging shows
+  // the limits, and there is no way to type something out of range.
+  if (
+    field.kind === 'number' &&
+    field.min !== undefined &&
+    field.max !== undefined &&
+    field.max - field.min <= 300
+  ) {
+    return (
+      <Range
+        id={id}
+        value={typeof value === 'number' ? value : field.min}
+        min={field.min}
+        max={field.max}
+        label={field.label}
+        hint={field.hint}
+        onChange={(next) => {
+          onChange({ [field.name]: next });
+        }}
+      />
+    );
+  }
+
+  if (field.kind === 'select' && field.choices) {
+    return (
+      <Choice
+        id={id}
+        value={typeof value === 'string' ? value : (field.choices[0] ?? '')}
+        label={field.label}
+        options={field.choices.map((choice) => ({
+          value: choice,
+          label: humaniseChoice(choice),
+        }))}
+        onChange={(next) => {
+          onChange({ [field.name]: next });
+        }}
+      />
     );
   }
 

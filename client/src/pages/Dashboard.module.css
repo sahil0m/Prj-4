@@ -467,3 +467,46 @@
   background: color-mix(in srgb, var(--color-accent) 12%, transparent);
   transform: translateY(-1px);
 }
+
+/* ---------------- command palette trigger ---------------- */
+
+/*
+ * Looks like a search field rather than a button, because that is what
+ * people reach for. The keyboard hint teaches the shortcut without a
+ * tooltip nobody hovers long enough to see.
+ */
+.commandButton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 190px;
+  padding: 7px 10px;
+  border-radius: var(--radius-md);
+  font-size: 13.5px;
+  color: var(--color-ink-subtle);
+  background: color-mix(in srgb, var(--color-ink) 5%, transparent);
+  border: 1px solid var(--color-border);
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+}
+
+.commandButton:hover {
+  color: var(--color-ink-muted);
+  border-color: var(--color-border-strong);
+}
+
+.commandLabel {
+  flex: 1;
+  text-align: left;
+}
+
+@media (max-width: 720px) {
+  .commandButton {
+    min-width: 0;
+  }
+
+  .commandLabel {
+    display: none;
+  }
+}
