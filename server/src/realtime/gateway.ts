@@ -291,6 +291,31 @@ export function attachRealtime(
       })();
     });
 
+    socket.on('participant:leaderboard', (ack) => {
+      void (async () => {
+        try {
+          const { sessionId, participantId } = context;
+          if (!sessionId || !participantId) {
+            ack({ ok: false, code: 'not_joined', message: 'Join the session first.' });
+            return;
+          }
+
+          const session = await Session.findById(sessionId);
+          if (!session) {
+            ack({ ok: false, code: 'session_not_found', message: 'That session has ended.' });
+            return;
+          }
+
+          const entries = await sessions.leaderboardFor(session);
+          // The caller's own id comes back so their row can be highlighted
+          // without the phone having to know who it is.
+          ack({ ok: true, entries, you: participantId });
+        } catch {
+          ack({ ok: false, code: 'internal', message: 'Something went wrong.' });
+        }
+      })();
+    });
+
     socket.on('participant:reaction', (raw) => {
       const { sessionId } = context;
       if (!sessionId) return;
@@ -299,8 +324,11 @@ export function attachRealtime(
       const parsed = zReaction.safeParse(raw);
       if (!parsed.success) return;
 
-      // Reactions are ephemeral by design — never stored, just shown.
-      io.to(room.presenters(sessionId)).emit('reaction', { emoji: parsed.data.emoji });
+      // Ephemeral by design: never stored, just shown. Sent to the room as
+      // well as the presenter, so a phone can show that others reacted too.
+      io.to(room.presenters(sessionId))
+        .to(room.participants(sessionId))
+        .emit('reaction', { emoji: parsed.data.emoji });
     });
 
     /* ---------------- presenters ---------------- */

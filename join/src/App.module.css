@@ -348,3 +348,26 @@
   font-size: 15px;
   color: var(--color-ink-muted);
 }
+
+/* ---------------- quiz outcome ---------------- */
+
+.wrongMark {
+  display: grid;
+  place-items: center;
+  width: 62px;
+  height: 62px;
+  border-radius: 50%;
+  color: #fff;
+  background: var(--color-danger);
+  animation: pop 0.32s var(--ease-spring);
+}
+
+/* The points earned, which is the number a player actually watches for. */
+.points {
+  font-size: 30px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-positive);
+  animation: pop 0.4s var(--ease-spring);
+}

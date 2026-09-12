@@ -441,6 +441,7 @@ export interface PublicUser {
   emailVerified: boolean;
   hasPassword: boolean;
   providers: string[];
+  role: 'user' | 'admin';
 }
 
 /** Everything the client is allowed to know about the signed-in user. */
@@ -456,5 +457,6 @@ export function toPublicUser(user: UserDoc): PublicUser {
     // absent on most queries. See the note on the field in models/User.ts.
     hasPassword: user.hasPassword,
     providers: user.identities.map((i) => i.provider),
+    role: user.role,
   };
 }

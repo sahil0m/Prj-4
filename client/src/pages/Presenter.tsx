@@ -13,10 +13,17 @@ import {
   Maximize2,
   Minimize2,
   WifiOff,
+  Download,
+  Sparkles,
+  Loader2,
 } from 'lucide-react';
 import { definitionFor, type SlideKind } from '@pulse/shared';
 import { usePresenter } from '../lib/presenter-store';
 import { Results } from '../components/Results';
+import { Leaderboard } from '../components/Leaderboard';
+import { api, ApiError, type TextSummary } from '../lib/api';
+import { useAiAvailable } from '../components/AiPanel';
+import { toast } from 'sonner';
 import { QrCode } from '../components/QrCode';
 import { Splash } from '../components/Splash';
 import styles from './Presenter.module.css';
@@ -36,6 +43,7 @@ export function Presenter() {
   const snapshot = usePresenter((s) => s.snapshot);
   const state = usePresenter((s) => s.state);
   const results = usePresenter((s) => s.results);
+  const leaderboard = usePresenter((s) => s.leaderboard);
   const connected = usePresenter((s) => s.connected);
   const loading = usePresenter((s) => s.loading);
   const error = usePresenter((s) => s.error);
@@ -50,6 +58,18 @@ export function Presenter() {
 
   const [fullscreen, setFullscreen] = useState(false);
   const [confirmEnd, setConfirmEnd] = useState(false);
+  const [summary, setSummary] = useState<{ data: TextSummary; slideId: string } | null>(null);
+  const [summarising, setSummarising] = useState(false);
+
+  const aiAvailable = useAiAvailable();
+
+  const download = (format: 'csv' | 'leaderboard' | 'json') => {
+    if (!sessionId) return;
+    // A plain navigation rather than fetch-and-blob: the response carries a
+    // Content-Disposition header, so the browser saves it under the right
+    // name and nothing has to be held in memory.
+    window.open(`/api/sessions/${sessionId}/export?format=${format}`, '_blank');
+  };
 
   useEffect(() => {
     if (sessionId) void open(sessionId);
@@ -128,6 +148,34 @@ export function Presenter() {
   const slide = slides[index] ?? slides[0];
   const answerable = slide ? definitionFor(slide.kind as SlideKind).answerable : false;
 
+  // Decides which export the button offers: standings for a quiz deck, the
+  // raw answers otherwise.
+  const hasQuiz = slides.some((s) => definitionFor(s.kind as SlideKind).isQuiz);
+
+  // A summary belongs to one slide. Showing it after a slide change would
+  // attribute one question's themes to another.
+  const currentSummary = summary !== null && summary.slideId === slide?.id ? summary.data : null;
+
+  /**
+   * Groups a wall of open text into themes.
+   *
+   * The most useful thing the AI does here: two hundred free-text answers
+   * are unreadable on a projector and a presenter cannot group them live.
+   */
+  const summarise = async () => {
+    if (!sessionId || !slide || summarising) return;
+
+    setSummarising(true);
+    try {
+      const result = await api.summarise(sessionId, slide.id);
+      setSummary({ data: result.summary, slideId: slide.id });
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'That could not be summarised.');
+    } finally {
+      setSummarising(false);
+    }
+  };
+
   // The server tells us where the audience should go. The browser cannot:
   // this tab may be on localhost, which no other device can reach.
   const joinUrl = session.joinUrl.replace(/^https?:\/\//, '');
@@ -194,7 +242,16 @@ export function Presenter() {
             {subtitleOf(slide) !== '' && <p className={styles.subtitle}>{subtitleOf(slide)}</p>}
 
             <div className={styles.results}>
-              {!answerable ? (
+              {slide?.kind === 'leaderboard' ? (
+                <Leaderboard entries={leaderboard} />
+              ) : currentSummary ? (
+                <SummaryView
+                  summary={currentSummary}
+                  onClose={() => {
+                    setSummary(null);
+                  }}
+                />
+              ) : !answerable ? (
                 <ContentSlide kind={slide?.kind as SlideKind} config={slide?.config ?? {}} />
               ) : state?.resultsVisible === false ? (
                 <div className={styles.hidden}>
@@ -271,6 +328,38 @@ export function Presenter() {
               </button>
             </>
           )}
+
+          {/* Only for slides whose answers are prose. A bar chart needs no
+              summary, and offering one there would be noise. */}
+          {aiAvailable && isTextKind(slide?.kind) && (results?.count ?? 0) > 0 && (
+            <button
+              type="button"
+              className={styles.controlButton}
+              onClick={() => {
+                if (currentSummary) setSummary(null);
+                else void summarise();
+              }}
+              disabled={summarising}
+              title="Group these answers into themes"
+            >
+              {summarising ? <Loader2 size={18} className={styles.spin} /> : <Sparkles size={18} />}
+              <span className={styles.controlLabel}>
+                {summarising ? 'Reading' : currentSummary ? 'Answers' : 'Summarise'}
+              </span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            className={styles.controlButton}
+            onClick={() => {
+              download(hasQuiz ? 'leaderboard' : 'csv');
+            }}
+            title="Download the results"
+          >
+            <Download size={18} />
+            <span className={styles.controlLabel}>Export</span>
+          </button>
 
           <button
             type="button"
@@ -416,4 +505,55 @@ function promptOf(slide: { config: Record<string, unknown> } | undefined): strin
 function subtitleOf(slide: { config: Record<string, unknown> } | undefined): string {
   const subtitle = slide?.config.subtitle;
   return typeof subtitle === 'string' ? subtitle : '';
+}
+
+/** Kinds whose answers are prose, and so worth summarising. */
+function isTextKind(kind: string | undefined): boolean {
+  return kind === 'open_text' || kind === 'word_cloud' || kind === 'qa';
+}
+
+/* ------------------------------------------------------------------ */
+/* Summary                                                             */
+/* ------------------------------------------------------------------ */
+
+/** The AI reading of a wall of open text. */
+function SummaryView({ summary, onClose }: { summary: TextSummary; onClose: () => void }) {
+  const total = summary.themes.reduce((sum, theme) => sum + theme.count, 0);
+
+  return (
+    <motion.div
+      className={styles.summary}
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+    >
+      <p className={styles.summaryHeadline}>{summary.headline}</p>
+
+      <ul className={styles.themes}>
+        {summary.themes.map((theme) => (
+          <li key={theme.label} className={styles.theme}>
+            <div className={styles.themeBar}>
+              <motion.div
+                className={styles.themeFill}
+                initial={{ width: 0 }}
+                animate={{ width: `${String(total === 0 ? 0 : (theme.count / total) * 100)}%` }}
+                transition={{ type: 'spring', stiffness: 120, damping: 20 }}
+              />
+            </div>
+            <div className={styles.themeText}>
+              <span className={styles.themeLabel}>{theme.label}</span>
+              <span className={styles.themeCount}>{theme.count}</span>
+            </div>
+            {theme.example !== undefined && theme.example !== '' && (
+              <p className={styles.themeExample}>{theme.example}</p>
+            )}
+          </li>
+        ))}
+      </ul>
+
+      <button type="button" className={styles.summaryClose} onClick={onClose}>
+        Show the answers instead
+      </button>
+    </motion.div>
+  );
 }

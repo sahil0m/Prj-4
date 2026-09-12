@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SessionState, ParticipantSlide } from '@pulse/shared';
-import { SessionConnection, clearQueue, type ConnectionStatus } from './lib/session';
+import {
+  SessionConnection,
+  clearQueue,
+  type ConnectionStatus,
+  type QuizResult,
+} from './lib/session';
 import { AnswerInput } from './components/AnswerInput';
+import { ActionBar } from './components/ActionBar';
 import styles from './App.module.css';
 
 /**
@@ -36,6 +42,11 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
   const [pending, setPending] = useState(0);
+  const [quizResult, setQuizResult] = useState<QuizResult | null>(null);
+
+  // A quiz deck is the only one where a scoreboard means anything, and a
+  // quiz result arriving is the signal that this deck has one.
+  const [hasScores, setHasScores] = useState(false);
 
   const connection = useRef<SessionConnection | null>(null);
 
@@ -49,6 +60,9 @@ export function App() {
     setSlide(next);
     setSent(next?.answered === true);
     slideShownAt.current = Date.now();
+    // A result belongs to the slide it came from; carrying it forward would
+    // tell someone they were right about a question they have not seen.
+    setQuizResult(null);
   }, []);
 
   useEffect(() => {
@@ -75,6 +89,10 @@ export function App() {
       onAnswerAccepted: () => {
         setPending(connection.current?.pendingCount ?? 0);
         setSent(true);
+      },
+      onQuizResult: (result) => {
+        setQuizResult(result);
+        setHasScores(true);
       },
     });
 
@@ -204,6 +222,8 @@ export function App() {
       <main className={styles.stage}>
         {!slide ? (
           <Waiting message="Waiting for the presenter" />
+        ) : quizResult ? (
+          <QuizOutcome result={quizResult} />
         ) : sent ? (
           <Sent pending={pending} />
         ) : !open ? (
@@ -234,6 +254,8 @@ export function App() {
       {collectNames && name !== '' && (
         <footer className={styles.footer}>Answering as {name}</footer>
       )}
+
+      {connection.current && <ActionBar connection={connection.current} showScores={hasScores} />}
     </div>
   );
 }
@@ -435,6 +457,68 @@ function Sent({ pending }: { pending: number }) {
         {pending > 0 ? 'Saved — it will send when you are back online.' : 'Look at the screen.'}
       </p>
     </div>
+  );
+}
+
+/**
+ * How this device did on a quiz question.
+ *
+ * Shows only this person's own result. Sending the whole leaderboard to
+ * every phone would turn a quiz into a copying exercise, and seeing your
+ * own rank is the part that makes someone want the next question.
+ */
+function QuizOutcome({ result }: { result: QuizResult }) {
+  return (
+    <div className={styles.waiting}>
+      <div className={result.correct ? styles.sentMark : styles.wrongMark} aria-hidden="true">
+        {result.correct ? <Tick /> : <Cross />}
+      </div>
+
+      <p className={styles.sentTitle}>{result.correct ? 'Correct' : 'Not this time'}</p>
+
+      {result.correct && result.points > 0 && (
+        <p className={styles.points}>+{result.points.toLocaleString()}</p>
+      )}
+
+      <p className={styles.waitingText}>
+        {result.totalScore.toLocaleString()} points
+        {result.rank !== null ? ` \u00b7 ${ordinal(result.rank)} place` : ''}
+      </p>
+    </div>
+  );
+}
+
+/** 1st, 2nd, 3rd, 4th - the form a person reads without thinking. */
+function ordinal(n: number): string {
+  const rest = n % 100;
+  if (rest >= 11 && rest <= 13) return `${String(n)}th`;
+
+  switch (n % 10) {
+    case 1:
+      return `${String(n)}st`;
+    case 2:
+      return `${String(n)}nd`;
+    case 3:
+      return `${String(n)}rd`;
+    default:
+      return `${String(n)}th`;
+  }
+}
+
+function Cross() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="26"
+      height="26"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="3"
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
+      <path d="M6 6l12 12M18 6L6 18" />
+    </svg>
   );
 }
 

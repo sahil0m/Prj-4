@@ -15,6 +15,7 @@ import {
   MoreVertical,
   Loader2,
   Sparkles,
+  Shield,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../lib/auth-store';
@@ -163,6 +164,18 @@ export function Dashboard() {
                   <Settings size={15} />
                   Account settings
                 </DropdownMenu.Item>
+
+                {user?.role === 'admin' && (
+                  <DropdownMenu.Item
+                    className={styles.menuItem}
+                    onSelect={() => {
+                      void navigate('/admin');
+                    }}
+                  >
+                    <Shield size={15} />
+                    Admin
+                  </DropdownMenu.Item>
+                )}
 
                 <DropdownMenu.Item
                   className={`${styles.menuItem} ${styles.menuItemDanger}`}

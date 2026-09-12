@@ -7,6 +7,7 @@ import type {
   SlideResults,
   JoinResult,
   AckResult,
+  LeaderboardResult,
 } from '@pulse/shared';
 
 /**
@@ -103,6 +104,15 @@ function writeQueue(queue: QueuedAnswer[]): void {
 
 export type ConnectionStatus = 'connecting' | 'connected' | 'reconnecting' | 'offline';
 
+/** This device's own result for a quiz slide it just answered. */
+export interface QuizResult {
+  slideId: string;
+  correct: boolean;
+  points: number;
+  totalScore: number;
+  rank: number | null;
+}
+
 export interface SessionHandlers {
   onState: (state: SessionState) => void;
   onSlide: (slide: ParticipantSlide | null) => void;
@@ -111,6 +121,8 @@ export interface SessionHandlers {
   onStatus: (status: ConnectionStatus) => void;
   /** Fires when a queued answer finally lands, so the UI can confirm it. */
   onAnswerAccepted: (slideId: string) => void;
+  /** Only ever about this device; other people's scores are never sent. */
+  onQuizResult: (result: QuizResult) => void;
 }
 
 export class SessionConnection {
@@ -171,6 +183,10 @@ export class SessionConnection {
     socket.on('results:update', (results) => {
       this.handlers.onResults(results);
     });
+    socket.on('quiz:result', (result) => {
+      this.handlers.onQuizResult(result);
+    });
+
     socket.on('session:ended', () => {
       this.handlers.onEnded();
     });
@@ -306,6 +322,31 @@ export class SessionConnection {
 
   reaction(emoji: 'clap' | 'heart' | 'laugh' | 'wow' | 'thumbsUp'): void {
     this.socket?.emit('participant:reaction', { emoji });
+  }
+
+  /**
+   * Fetches the standings on demand.
+   *
+   * Pulled rather than pushed: a phone shows the scoreboard only when
+   * someone opens it, and pushing every change to every device would be
+   * constant traffic nobody is looking at.
+   */
+  leaderboard(): Promise<LeaderboardResult> {
+    return new Promise((resolve) => {
+      if (!this.socket?.connected) {
+        resolve({ ok: false, code: 'offline', message: 'No connection.' });
+        return;
+      }
+
+      const timer = setTimeout(() => {
+        resolve({ ok: false, code: 'timeout', message: 'The scores did not load.' });
+      }, 8000);
+
+      this.socket.emit('participant:leaderboard', (result) => {
+        clearTimeout(timer);
+        resolve(result);
+      });
+    });
   }
 
   question(text: string): Promise<AckResult> {

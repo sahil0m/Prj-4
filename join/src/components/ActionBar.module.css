@@ -1,0 +1,229 @@
+/*
+ * The bottom bar and its panels.
+ *
+ * Fixed to the bottom with safe-area padding, so on a notched phone the
+ * buttons sit above the home indicator rather than under it.
+ */
+
+.bar {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  gap: 4px;
+  padding: 8px var(--space-lg) calc(8px + env(safe-area-inset-bottom));
+  background: color-mix(in srgb, var(--color-canvas) 92%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-top: 1px solid var(--color-border);
+}
+
+.action {
+  flex: 1;
+  display: grid;
+  justify-items: center;
+  gap: 1px;
+  min-height: 52px;
+  padding: 6px;
+  border-radius: var(--radius-md);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--color-ink-subtle);
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+}
+
+.action[data-active='true'] {
+  color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 13%, transparent);
+}
+
+.actionGlyph {
+  font-size: 19px;
+  line-height: 1.1;
+}
+
+/* ---------------- panels ---------------- */
+
+.panel {
+  display: grid;
+  gap: var(--space-sm);
+  padding: var(--space-lg);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface-raised);
+  animation: rise 0.22s var(--ease-enter);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+.panelButton {
+  width: 100%;
+  min-height: 48px;
+  border-radius: var(--radius-md);
+  font-size: 15px;
+  font-weight: 650;
+  color: #fff;
+  background: var(--accent-gradient);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.panelButton:disabled {
+  opacity: 0.4;
+  background: color-mix(in srgb, var(--color-ink) 14%, transparent);
+}
+
+.panelClose {
+  justify-self: center;
+  padding: 8px 16px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-ink-subtle);
+}
+
+.panelError {
+  font-size: 13px;
+  color: var(--color-danger);
+}
+
+.sentNote {
+  padding: var(--space-md) 0;
+  text-align: center;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--color-positive);
+}
+
+/* ---------------- reactions ---------------- */
+
+.reactions {
+  display: flex;
+  justify-content: space-around;
+  gap: 4px;
+  padding: var(--space-md) var(--space-lg);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface-raised);
+  animation: rise 0.22s var(--ease-enter);
+}
+
+.reaction {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  font-size: 27px;
+  background: color-mix(in srgb, var(--color-ink) 6%, transparent);
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.1s var(--ease-spring);
+}
+
+.reaction:active {
+  transform: scale(1.18);
+}
+
+/* ---------------- question ---------------- */
+
+.questionInput {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  /* 16px exactly: anything smaller makes iOS zoom on focus. */
+  font-size: 16px;
+  font-family: inherit;
+  line-height: 1.45;
+  resize: none;
+  color: var(--color-ink);
+  background: color-mix(in srgb, var(--color-ink) 6%, transparent);
+  border: 2px solid var(--color-border);
+}
+
+.questionInput:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+/* ---------------- scores ---------------- */
+
+.scoreList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.scoreRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-ink) 5%, transparent);
+  border: 1px solid transparent;
+}
+
+/* Your own row is outlined rather than merely tinted, so it is findable at
+   a glance in a list of similar rows. */
+.scoreRow[data-you='true'] {
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+}
+
+.scoreRow[data-rank='1'] {
+  background: color-mix(in srgb, var(--color-caution) 14%, transparent);
+}
+
+.scoreRank {
+  flex: none;
+  min-width: 22px;
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-ink-subtle);
+}
+
+.scoreName {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14.5px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.youTag {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 20%, transparent);
+}
+
+.scoreValue {
+  flex: none;
+  font-size: 14.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Marks the jump between the top few and the player's own distant row. */
+.scoreGap {
+  text-align: center;
+  font-size: 15px;
+  color: var(--color-ink-subtle);
+  letter-spacing: 0.2em;
+}

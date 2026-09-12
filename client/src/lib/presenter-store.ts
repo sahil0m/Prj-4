@@ -1,6 +1,12 @@
 import { create } from 'zustand';
 import { io, type Socket } from 'socket.io-client';
-import type { ServerEvents, ClientEvents, SessionState, SlideResults } from '@pulse/shared';
+import type {
+  ServerEvents,
+  ClientEvents,
+  SessionState,
+  SlideResults,
+  LeaderboardEntry,
+} from '@pulse/shared';
 import { getAccessToken, api, ApiError } from './api';
 
 /**
@@ -31,6 +37,7 @@ interface PresenterStore {
   snapshot: SessionSnapshot | null;
   state: SessionState | null;
   results: SlideResults | null;
+  leaderboard: LeaderboardEntry[];
   connected: boolean;
   loading: boolean;
   error: string | null;
@@ -53,6 +60,7 @@ export const usePresenter = create<PresenterStore>((set, get) => ({
   snapshot: null,
   state: null,
   results: null,
+  leaderboard: [],
   connected: false,
   loading: false,
   error: null,
@@ -98,6 +106,10 @@ export const usePresenter = create<PresenterStore>((set, get) => ({
       if (results.slideId === get().state?.currentSlideId) set({ results });
     });
 
+    socket.on('leaderboard:update', ({ entries }) => {
+      set({ leaderboard: entries });
+    });
+
     socket.on('session:ended', () => {
       set({ connected: false });
     });
@@ -111,6 +123,7 @@ export const usePresenter = create<PresenterStore>((set, get) => ({
       snapshot: null,
       state: null,
       results: null,
+      leaderboard: [],
       connected: false,
       error: null,
     });

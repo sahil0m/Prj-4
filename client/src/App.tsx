@@ -6,6 +6,7 @@ import { SignIn } from './pages/SignIn';
 import { Dashboard } from './pages/Dashboard';
 import { DeckEditor } from './pages/DeckEditor';
 import { Presenter } from './pages/Presenter';
+import { Admin } from './pages/Admin';
 import { Splash } from './components/Splash';
 
 /**
@@ -49,6 +50,13 @@ function Shell() {
       <Route
         path="/present/:sessionId"
         element={status === 'authenticated' ? <Presenter /> : <Navigate to="/signin" replace />}
+      />
+
+      {/* Guarded on the server too: this route only hides the link, it is
+          not what keeps a non-admin out. */}
+      <Route
+        path="/admin"
+        element={status === 'authenticated' ? <Admin /> : <Navigate to="/signin" replace />}
       />
 
       <Route path="*" element={<Navigate to="/" replace />} />

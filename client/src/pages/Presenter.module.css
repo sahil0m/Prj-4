@@ -463,3 +463,94 @@
   color: var(--color-ink-muted);
   max-width: 44ch;
 }
+
+/* ---------------- AI summary ---------------- */
+
+.summary {
+  display: grid;
+  gap: clamp(14px, 2vh, 28px);
+  width: 100%;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+/* The one sentence a presenter can read aloud, so it leads. */
+.summaryHeadline {
+  font-size: clamp(17px, 2vw, 32px);
+  font-weight: 600;
+  line-height: 1.32;
+  text-align: center;
+  text-wrap: balance;
+  color: var(--color-ink);
+}
+
+.themes {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: clamp(8px, 1.2vh, 16px);
+}
+
+.theme {
+  display: grid;
+  gap: 4px;
+}
+
+.themeBar {
+  height: clamp(8px, 1vh, 14px);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--color-ink) 7%, transparent);
+  overflow: hidden;
+}
+
+.themeFill {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--accent-gradient);
+}
+
+.themeText {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.themeLabel {
+  font-size: clamp(14px, 1.4vw, 22px);
+  font-weight: 600;
+}
+
+.themeCount {
+  font-size: clamp(13px, 1.3vw, 20px);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-accent);
+}
+
+/* One real answer per theme, so the room sees it was not invented. */
+.themeExample {
+  font-size: clamp(12px, 1.1vw, 16px);
+  line-height: 1.4;
+  color: var(--color-ink-subtle);
+  font-style: italic;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.summaryClose {
+  justify-self: center;
+  padding: 8px 14px;
+  border-radius: var(--radius-md);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-ink-muted);
+  border: 1px solid var(--color-border);
+}
+
+.summaryClose:hover {
+  color: var(--color-ink);
+  border-color: var(--color-border-strong);
+}

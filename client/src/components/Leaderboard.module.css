@@ -1,0 +1,259 @@
+/*
+ * Read from the back of a room, so rows are tall and the numbers are large.
+ * Everything scales with the viewport rather than switching at breakpoints,
+ * because this shows on a laptop and on a projector without either being a
+ * special case.
+ */
+
+.board {
+  display: grid;
+  gap: var(--space-md);
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: clamp(6px, 1vh, 12px);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto auto;
+  align-items: center;
+  gap: clamp(10px, 1.4vw, 22px);
+  padding: clamp(10px, 1.3vh, 18px) clamp(14px, 1.6vw, 24px);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--color-ink) 6%, transparent);
+  border: 1px solid transparent;
+}
+
+/* The top three are lifted out of the list rather than merely coloured, so
+   the shape of the leaderboard reads at a glance from a distance. */
+.row[data-rank='1'] {
+  background: color-mix(in srgb, var(--color-caution) 16%, transparent);
+  border-color: color-mix(in srgb, var(--color-caution) 45%, transparent);
+}
+
+.row[data-rank='2'] {
+  background: color-mix(in srgb, var(--color-ink) 11%, transparent);
+  border-color: color-mix(in srgb, var(--color-ink) 22%, transparent);
+}
+
+.row[data-rank='3'] {
+  background: color-mix(in srgb, #cd7f32 14%, transparent);
+  border-color: color-mix(in srgb, #cd7f32 38%, transparent);
+}
+
+.rank {
+  display: grid;
+  place-items: center;
+  min-width: clamp(34px, 3vw, 52px);
+  font-size: clamp(17px, 1.8vw, 28px);
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-ink-subtle);
+}
+
+.medal {
+  display: grid;
+  place-items: center;
+  width: clamp(32px, 2.8vw, 46px);
+  height: clamp(32px, 2.8vw, 46px);
+  border-radius: 50%;
+  color: var(--color-canvas);
+}
+
+.medal[data-rank='1'] {
+  background: var(--color-caution);
+}
+
+.medal[data-rank='2'] {
+  background: color-mix(in srgb, var(--color-ink) 55%, transparent);
+}
+
+.medal[data-rank='3'] {
+  background: #cd7f32;
+}
+
+.name {
+  min-width: 0;
+  font-size: clamp(16px, 1.7vw, 28px);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------------- movement ---------------- */
+
+.movement {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  /* Reserved even when empty, so rows do not shift width as arrows appear
+     and disappear between slides. */
+  min-width: clamp(30px, 2.6vw, 44px);
+  justify-content: flex-end;
+  font-size: clamp(12px, 1.1vw, 16px);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-ink-subtle);
+}
+
+.movement[data-direction='up'] {
+  color: var(--color-positive);
+}
+
+.movement[data-direction='down'] {
+  color: var(--color-danger);
+}
+
+/* ---------------- stats ---------------- */
+
+.stats {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.correct {
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  font-size: clamp(11.5px, 1vw, 15px);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-ink-muted);
+  background: color-mix(in srgb, var(--color-ink) 9%, transparent);
+}
+
+.score {
+  min-width: clamp(70px, 6vw, 120px);
+  text-align: right;
+  font-size: clamp(18px, 2vw, 32px);
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.others {
+  text-align: center;
+  font-size: clamp(12.5px, 1.1vw, 16px);
+  color: var(--color-ink-subtle);
+}
+
+/* ---------------- empty ---------------- */
+
+.empty {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-4xl) 0;
+  text-align: center;
+}
+
+.emptyIcon {
+  color: var(--color-ink-subtle);
+  margin-bottom: var(--space-sm);
+}
+
+.emptyTitle {
+  font-size: clamp(17px, 1.8vw, 26px);
+  font-weight: 650;
+  color: var(--color-ink-muted);
+}
+
+.emptyBody {
+  font-size: clamp(13px, 1.2vw, 18px);
+  color: var(--color-ink-subtle);
+}
+
+/* ---------------- podium ---------------- */
+
+.podium {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: clamp(10px, 1.6vw, 28px);
+  width: 100%;
+}
+
+.podiumPlace {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  flex: 1;
+  max-width: 260px;
+}
+
+.podiumName {
+  font-size: clamp(14px, 1.5vw, 24px);
+  font-weight: 650;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.podiumScore {
+  font-size: clamp(16px, 1.8vw, 28px);
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-accent);
+}
+
+/* Heights encode the ranking, so the shape is readable without the numbers. */
+.podiumBlock {
+  display: grid;
+  place-items: start center;
+  width: 100%;
+  padding-top: clamp(8px, 1vh, 14px);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+.podiumBlock[data-rank='1'] {
+  height: clamp(110px, 17vh, 190px);
+  background: linear-gradient(
+    180deg,
+    var(--color-caution),
+    color-mix(in srgb, var(--color-caution) 40%, transparent)
+  );
+}
+
+.podiumBlock[data-rank='2'] {
+  height: clamp(80px, 12vh, 140px);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-ink) 45%, transparent),
+    color-mix(in srgb, var(--color-ink) 15%, transparent)
+  );
+}
+
+.podiumBlock[data-rank='3'] {
+  height: clamp(60px, 9vh, 105px);
+  background: linear-gradient(180deg, #cd7f32, color-mix(in srgb, #cd7f32 35%, transparent));
+}
+
+.podiumRank {
+  font-size: clamp(22px, 2.6vw, 40px);
+  font-weight: 750;
+  color: var(--color-canvas);
+}
+
+@media (max-width: 600px) {
+  .row {
+    /* The movement arrow is the first thing to go on a narrow screen; the
+       name and the score are what matter. */
+    grid-template-columns: auto 1fr auto;
+  }
+
+  .movement,
+  .stats {
+    display: none;
+  }
+}

@@ -212,7 +212,20 @@ export interface ClientEvents {
     ack: (r: AckResult) => void,
   ) => void;
   'presenter:end': (ack: (r: AckResult) => void) => void;
+
+  /**
+   * A participant asking for the current standings.
+   *
+   * Pulled rather than pushed: a phone shows the scoreboard only when
+   * someone opens it, and pushing every change to every device would be
+   * constant traffic nobody is looking at.
+   */
+  'participant:leaderboard': (ack: (result: LeaderboardResult) => void) => void;
 }
+
+export type LeaderboardResult =
+  | { ok: true; entries: LeaderboardEntry[]; you: string | null }
+  | { ok: false; code: string; message: string };
 
 export type AckResult = { ok: true } | { ok: false; code: string; message: string };
 

@@ -20,6 +20,7 @@ export interface PublicUser {
   emailVerified: boolean;
   hasPassword: boolean;
   providers: string[];
+  role: 'user' | 'admin';
 }
 
 export interface ApiErrorShape {
@@ -354,6 +355,31 @@ export const api = {
   ): Promise<{ prompts: string[]; options?: string[]; provider: string }> =>
     request('/ai/improve-slide', { method: 'POST', body: { deckId, slideId } }),
 
+  /* ---------------- admin ---------------- */
+
+  adminOverview: (): Promise<AdminOverview> => request('/admin/overview'),
+
+  adminUsers: (
+    options: { search?: string; cursor?: string } = {},
+  ): Promise<{
+    users: AdminUser[];
+    nextCursor: string | null;
+  }> => {
+    const params = new URLSearchParams();
+    if (options.search) params.set('search', options.search);
+    if (options.cursor) params.set('cursor', options.cursor);
+    const query = params.toString();
+    return request(`/admin/users${query ? `?${query}` : ''}`);
+  },
+
+  adminSessions: (): Promise<{ sessions: AdminSession[] }> => request('/admin/sessions'),
+
+  adminSuspend: (userId: string, suspended: boolean, reason: string): Promise<{ ok: true }> =>
+    request(`/admin/users/${userId}/suspend`, { method: 'POST', body: { suspended, reason } }),
+
+  adminRole: (userId: string, role: 'user' | 'admin'): Promise<{ ok: true }> =>
+    request(`/admin/users/${userId}/role`, { method: 'POST', body: { role } }),
+
   summarise: (sessionId: string, slideId: string): Promise<{ summary: TextSummary }> =>
     request('/ai/summarise', { method: 'POST', body: { sessionId, slideId } }),
 };
@@ -437,4 +463,43 @@ export interface ActiveSession {
   createdAt: string;
   expiresAt: string;
   current: boolean;
+}
+
+/* ------------------------------------------------------------------ */
+/* Admin shapes                                                        */
+/* ------------------------------------------------------------------ */
+
+export interface AdminOverview {
+  users: { total: number; active7d: number; newThisWeek: number; suspended: number };
+  content: { decks: number; sessions: number; liveSessions: number; responses: number };
+  ai: { configured: boolean; providers: string[]; requestsToday: number };
+  health: { database: { ok: boolean; latencyMs: number }; uptimeSeconds: number };
+}
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  name: string;
+  role: 'user' | 'admin';
+  providers: string[];
+  emailVerified: boolean;
+  suspended: boolean;
+  suspendedReason: string;
+  deckCount: number;
+  sessionCount: number;
+  aiRequestsToday: number;
+  createdAt: string;
+  lastSeenAt: string | null;
+}
+
+export interface AdminSession {
+  id: string;
+  title: string;
+  joinCode: string;
+  ownerName: string;
+  ownerEmail: string;
+  state: string;
+  participants: number;
+  responses: number;
+  startedAt: string;
 }
