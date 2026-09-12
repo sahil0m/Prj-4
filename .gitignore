@@ -12,7 +12,11 @@ coverage/
 .vite/
 .turbo/
 *.tsbuildinfo
-docs/build-src/
 
 # Generated stylesheet, rebuilt by `npm run theme:build`
 **/src/styles/theme.css
+
+# Local editor and assistant tooling; never part of the project.
+.claude/
+.cursor/
+.aider*
