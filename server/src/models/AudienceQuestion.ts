@@ -41,8 +41,6 @@ audienceQuestionSchema.index({ sessionId: 1, clientMsgId: 1 }, { unique: true })
 /** The moderation queue, and the "most voted" ordering. */
 audienceQuestionSchema.index({ sessionId: 1, status: 1, upvotes: -1, createdAt: -1 });
 
-export type AudienceQuestionDoc = HydratedDocument<
-  InferSchemaType<typeof audienceQuestionSchema>
->;
+export type AudienceQuestionDoc = HydratedDocument<InferSchemaType<typeof audienceQuestionSchema>>;
 
 export const AudienceQuestion = model('AudienceQuestion', audienceQuestionSchema);

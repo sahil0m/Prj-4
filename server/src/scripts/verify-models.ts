@@ -19,7 +19,7 @@ const X = '\x1b[0m';
 let passed = 0;
 let failed = 0;
 
-async function check(label: string, fn: () => Promise<void>) {
+async function check(label: string, fn: () => Promise<void> | void) {
   try {
     await fn();
     passed += 1;
@@ -50,7 +50,7 @@ async function main() {
     name: 'Verification User',
   });
 
-  await check('User is created and stored', async () => {
+  await check('User is created and stored', () => {
     assert(user._id, 'no id assigned');
     assert(user.email === email, 'email not normalised as expected');
   });
@@ -76,7 +76,7 @@ async function main() {
     }
   });
 
-  await check('toJSON strips the password hash', async () => {
+  await check('toJSON strips the password hash', () => {
     const json = JSON.parse(JSON.stringify(user)) as Record<string, unknown>;
     assert(!('passwordHash' in json), 'passwordHash present after serialisation');
     assert(!('__v' in json), '__v present after serialisation');
@@ -102,14 +102,18 @@ async function main() {
     const first = fetched.slides[0];
     assert(first?.kind === 'multiple_choice', 'slide kind not stored');
     const cfg = first.config as { options?: unknown[] };
-    assert(Array.isArray(cfg.options) && cfg.options.length === 3, 'slide config not stored intact');
+    assert(
+      Array.isArray(cfg.options) && cfg.options.length === 3,
+      'slide config not stored intact',
+    );
   });
 
   await check('Deck applies its default theme and settings', async () => {
     const fetched = await Deck.findById(deck._id).lean();
-    assert(fetched?.theme?.mode === 'dark', 'theme default missing');
+    assert(fetched?.theme.mode === 'dark', 'theme default missing');
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Mongoose types nested paths as possibly undefined; tsc requires the guard.
     assert(fetched?.settings?.mode === 'presenter_paced', 'settings default missing');
-    assert(fetched?.settings?.profanityFilter === true, 'profanity filter should default on');
+    assert(fetched.settings.profanityFilter, 'profanity filter should default on');
   });
 
   await check('an unknown slide kind is rejected', async () => {
@@ -139,9 +143,12 @@ async function main() {
     currentSlideId: 's1',
   });
 
-  await check('Session freezes a copy of the deck', async () => {
+  await check('Session freezes a copy of the deck', () => {
     const snap = session.deckSnapshot as { slides?: unknown[] };
-    assert(Array.isArray(snap.slides) && snap.slides.length === 2, 'snapshot did not capture slides');
+    assert(
+      Array.isArray(snap.slides) && snap.slides.length === 2,
+      'snapshot did not capture slides',
+    );
   });
 
   await check('editing the deck does not change the frozen snapshot', async () => {
@@ -195,7 +202,7 @@ async function main() {
     deviceToken: `device-${stamp}`,
   });
 
-  await check('Participant joins a session', async () => {
+  await check('Participant joins a session', () => {
     assert(participant._id, 'no id assigned');
     assert(participant.score === 0, 'score should start at zero');
   });
@@ -221,7 +228,7 @@ async function main() {
     clientMsgId: `msg-${stamp}`,
   });
 
-  await check('Response is recorded', async () => {
+  await check('Response is recorded', () => {
     assert(answer._id, 'no id assigned');
     assert(answer.upvotes === 0, 'upvotes should start at zero');
   });
@@ -254,7 +261,10 @@ async function main() {
     const all = await Response.countDocuments({ sessionId: session._id });
     assert(live === 0, 'deleted answer still counted as live');
     assert(all === 1, 'deleted answer was destroyed rather than marked');
-    await Response.updateOne({ _id: answer._id }, { $set: { deletedAt: null, deletedReason: null } });
+    await Response.updateOne(
+      { _id: answer._id },
+      { $set: { deletedAt: null, deletedReason: null } },
+    );
   });
 
   /* ---------------- AudienceQuestion ---------------- */
@@ -273,7 +283,7 @@ async function main() {
   /* ---------------- indexes ---------------- */
 
   await check('every declared index exists on the server', async () => {
-    const expectations: Array<[string, number]> = [
+    const expectations: [string, number][] = [
       ['users', 2],
       ['decks', 3],
       ['sessions', 4],

@@ -13,7 +13,7 @@ import { logger } from './logger.js';
 let connecting: Promise<typeof mongoose> | null = null;
 
 export async function connectDb(): Promise<typeof mongoose> {
-  if (mongoose.connection.readyState === 1) return mongoose;
+  if (mongoose.connection.readyState === mongoose.ConnectionStates.connected) return mongoose;
   if (connecting) return connecting;
 
   mongoose.set('strictQuery', true);
@@ -37,10 +37,7 @@ export async function connectDb(): Promise<typeof mongoose> {
       appName: 'pulse',
     })
     .then((m) => {
-      logger.info(
-        { host: m.connection.host, db: m.connection.name },
-        'Connected to MongoDB',
-      );
+      logger.info({ host: m.connection.host, db: m.connection.name }, 'Connected to MongoDB');
       return m;
     })
     .catch((err: unknown) => {
@@ -52,7 +49,7 @@ export async function connectDb(): Promise<typeof mongoose> {
 }
 
 export async function disconnectDb(): Promise<void> {
-  if (mongoose.connection.readyState === 0) return;
+  if (mongoose.connection.readyState === mongoose.ConnectionStates.disconnected) return;
   await mongoose.disconnect();
   connecting = null;
   logger.info('Disconnected from MongoDB');

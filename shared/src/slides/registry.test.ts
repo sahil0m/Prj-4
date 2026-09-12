@@ -38,7 +38,9 @@ describe('slide registry', () => {
     for (const def of ALL_DEFINITIONS) {
       const result = zSlideConfig.safeParse(def.defaults());
       if (!result.success) {
-        throw new Error(`${def.kind} not accepted by union: ${JSON.stringify(result.error.issues)}`);
+        throw new Error(
+          `${def.kind} not accepted by union: ${JSON.stringify(result.error.issues)}`,
+        );
       }
       expect(result.success).toBe(true);
     }
@@ -53,7 +55,10 @@ describe('slide registry', () => {
   it('gives every answerable kind an answer schema', () => {
     const answerKinds = new Set<string>(zAnswer.options.map((o) => o.shape.kind.value));
     for (const kind of ANSWERABLE_KINDS) {
-      expect(answerKinds.has(kind as string), `${kind} is answerable but has no answer schema`).toBe(true);
+      expect(
+        answerKinds.has(kind as string),
+        `${kind} is answerable but has no answer schema`,
+      ).toBe(true);
     }
   });
 
@@ -61,16 +66,19 @@ describe('slide registry', () => {
     const answerKinds = new Set<string>(zAnswer.options.map((o) => o.shape.kind.value));
     for (const def of ALL_DEFINITIONS) {
       if (!def.answerable) {
-        expect(answerKinds.has(def.kind as string), `${def.kind} is content but has an answer schema`).toBe(
-          false,
-        );
+        expect(
+          answerKinds.has(def.kind as string),
+          `${def.kind} is content but has an answer schema`,
+        ).toBe(false);
       }
     }
   });
 
   it('gives every answerable kind at least one export column', () => {
     for (const kind of ANSWERABLE_KINDS) {
-      expect(SLIDE_REGISTRY[kind].exportColumns.length, `${kind} export columns`).toBeGreaterThan(0);
+      expect(SLIDE_REGISTRY[kind].exportColumns.length, `${kind} export columns`).toBeGreaterThan(
+        0,
+      );
     }
   });
 

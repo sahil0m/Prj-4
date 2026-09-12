@@ -66,10 +66,7 @@ export const zPoints100Answer = z.object({
 export const zGrid2x2Answer = z.object({
   kind: z.literal('grid_2x2'),
   /** itemId -> position, each axis normalised 0..1 */
-  positions: z.record(
-    zLocalId,
-    z.object({ x: zFiniteInRange(0, 1), y: zFiniteInRange(0, 1) }),
-  ),
+  positions: z.record(zLocalId, z.object({ x: zFiniteInRange(0, 1), y: zFiniteInRange(0, 1) })),
 });
 
 export const zPinImageAnswer = z.object({

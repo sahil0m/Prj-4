@@ -21,16 +21,11 @@ export interface Rgb {
 export function parseColor(input: string): Rgb | null {
   const value = input.trim();
 
-  const hex = value.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+  const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(value);
   if (hex?.[1]) {
-    const h = hex[1];
-    if (h.length === 3) {
-      return {
-        r: parseInt(h[0]! + h[0]!, 16),
-        g: parseInt(h[1]! + h[1]!, 16),
-        b: parseInt(h[2]! + h[2]!, 16),
-      };
-    }
+    // Expand the three-digit form (#abc -> #aabbcc) so both paths share
+    // one slice-based read. Avoids indexing into a possibly-short string.
+    const h = hex[1].length === 3 ? hex[1].replace(/./g, (c) => c + c) : hex[1];
     return {
       r: parseInt(h.slice(0, 2), 16),
       g: parseInt(h.slice(2, 4), 16),
@@ -38,7 +33,7 @@ export function parseColor(input: string): Rgb | null {
     };
   }
 
-  const rgb = value.match(/^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)/i);
+  const rgb = /^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)/i.exec(value);
   if (rgb) {
     return { r: Number(rgb[1]), g: Number(rgb[2]), b: Number(rgb[3]) };
   }
@@ -140,7 +135,10 @@ export function checkContrast(
  * Picks whichever of two candidates reads better on the given background.
  * Used to decide black-or-white label text on top of a chart colour.
  */
-export function bestTextOn(background: string, candidates: [string, string] = ['#ffffff', '#07080c']): string {
+export function bestTextOn(
+  background: string,
+  candidates: [string, string] = ['#ffffff', '#07080c'],
+): string {
   const [a, b] = candidates;
   return contrastRatio(a, background) >= contrastRatio(b, background) ? a : b;
 }

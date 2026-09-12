@@ -4,21 +4,25 @@
   "version": "0.1.0",
   "description": "A free, open audience response platform.",
   "type": "module",
-  "workspaces": ["shared", "server", "client", "join"],
-  "engines": { "node": ">=20.0.0" },
+  "workspaces": [
+    "shared",
+    "server",
+    "client",
+    "join"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
-    "dev": "concurrently -n shared,server,client,join -c blue,green,magenta,yellow \"npm:dev:shared\" \"npm:dev:server\" \"npm:dev:client\" \"npm:dev:join\"",
-    "dev:shared": "npm run dev -w shared",
-    "dev:server": "npm run dev -w server",
-    "dev:client": "npm run dev -w client",
-    "dev:join": "npm run dev -w join",
-    "build": "npm run build -w shared && npm run build -w server && npm run build -w client && npm run build -w join",
+    "dev": "npm run dev --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "eslint . --max-warnings 0",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "verify": "npm run format:check && npm run lint && npm run typecheck && npm test"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

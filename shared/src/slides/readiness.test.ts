@@ -11,7 +11,7 @@ describe('slide readiness', () => {
   });
 
   it('flags a fresh multiple choice as not ready (no prompt written yet)', () => {
-    const cfg = { ...SLIDE_REGISTRY.multiple_choice.defaults(), prompt: '' } as SlideConfig;
+    const cfg = { ...SLIDE_REGISTRY.multiple_choice.defaults(), prompt: '' };
     const issues = validateSlideReady(cfg);
     expect(issues.some((i) => i.field === 'prompt' && i.level === 'error')).toBe(true);
     expect(isSlideReady(cfg)).toBe(false);

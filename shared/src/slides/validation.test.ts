@@ -42,9 +42,9 @@ describe('config schemas reject hostile input', () => {
   it('rejects fewer options than allowed', () => {
     const base = SLIDE_REGISTRY.multiple_choice.defaults();
     if (base.kind !== 'multiple_choice') throw new Error('wrong kind');
-    expect(zSlideConfig.safeParse({ ...base, options: [{ id: 'o1', label: 'Only one' }] }).success).toBe(
-      false,
-    );
+    expect(
+      zSlideConfig.safeParse({ ...base, options: [{ id: 'o1', label: 'Only one' }] }).success,
+    ).toBe(false);
   });
 
   it('rejects script-bearing and non-web url schemes in an image slide', () => {
@@ -165,8 +165,12 @@ describe('answer schemas reject hostile input', () => {
   });
 
   it('rejects pin coordinates outside the image', () => {
-    expect(zAnswer.safeParse({ kind: 'pin_image', pins: [{ x: 1.5, y: 0.5 }] }).success).toBe(false);
-    expect(zAnswer.safeParse({ kind: 'pin_image', pins: [{ x: -0.1, y: 0.5 }] }).success).toBe(false);
+    expect(zAnswer.safeParse({ kind: 'pin_image', pins: [{ x: 1.5, y: 0.5 }] }).success).toBe(
+      false,
+    );
+    expect(zAnswer.safeParse({ kind: 'pin_image', pins: [{ x: -0.1, y: 0.5 }] }).success).toBe(
+      false,
+    );
   });
 
   it('accepts pins exactly on the image edge', () => {

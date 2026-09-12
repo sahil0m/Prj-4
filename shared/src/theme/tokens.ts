@@ -186,17 +186,41 @@ export const editorType = {
  */
 export const stageType = {
   /** The question itself. Owns the top of the slide. */
-  prompt: { size: 'clamp(32px, 4.4cqw, 108px)', line: '1.12', tracking: '-0.02em', weight: 680, min: 32 },
+  prompt: {
+    size: 'clamp(32px, 4.4cqw, 108px)',
+    line: '1.12',
+    tracking: '-0.02em',
+    weight: 680,
+    min: 32,
+  },
   /** A supporting line under the question. */
-  subtitle: { size: 'clamp(20px, 2.2cqw, 52px)', line: '1.3', tracking: '-0.01em', weight: 500, min: 20 },
+  subtitle: {
+    size: 'clamp(20px, 2.2cqw, 52px)',
+    line: '1.3',
+    tracking: '-0.01em',
+    weight: 500,
+    min: 20,
+  },
   /** Labels on bars, options in a list. */
   label: { size: 'clamp(18px, 1.7cqw, 40px)', line: '1.25', tracking: '0', weight: 550, min: 18 },
   /** Percentages and counts. Tabular so digits do not shift. */
-  value: { size: 'clamp(20px, 2.0cqw, 48px)', line: '1.1', tracking: '-0.01em', weight: 680, min: 20 },
+  value: {
+    size: 'clamp(20px, 2.0cqw, 48px)',
+    line: '1.1',
+    tracking: '-0.01em',
+    weight: 680,
+    min: 20,
+  },
   /** The join code, shown enormous. */
   code: { size: 'clamp(40px, 6.5cqw, 160px)', line: '1', tracking: '0.06em', weight: 720, min: 40 },
   /** Corner chips: participant count, join hint. */
-  chip: { size: 'clamp(14px, 1.2cqw, 26px)', line: '1.3', tracking: '0.01em', weight: 550, min: 14 },
+  chip: {
+    size: 'clamp(14px, 1.2cqw, 26px)',
+    line: '1.3',
+    tracking: '0.01em',
+    weight: 550,
+    min: 14,
+  },
 } as const;
 
 /* ------------------------------------------------------------------ */
@@ -304,10 +328,10 @@ const toKebab = (s: string) => s.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerC
 /** Turns a set of colour roles into CSS custom properties. */
 export function rolesToCssVars(roles: ColorRoles): Record<string, string> {
   const out: Record<string, string> = {};
-  for (const [key, value] of Object.entries(roles)) {
-    out[`--color-${toKebab(key)}`] = value;
+  for (const key of Object.keys(roles) as (keyof ColorRoles)[]) {
+    out[`--color-${toKebab(key)}`] = roles[key];
   }
-  palette.data.forEach((hex, i) => {
+  palette.data.forEach((hex: string, i: number) => {
     out[`--color-data-${i + 1}`] = hex;
   });
   return out;

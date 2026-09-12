@@ -113,8 +113,9 @@ export const POSITION_GAP = 1000;
  * Passing null for either side means "at the very start" or "at the very end".
  */
 export function positionBetween(before: number | null, after: number | null): number {
-  if (before === null && after === null) return POSITION_GAP;
-  if (before === null) return after! - POSITION_GAP;
+  if (before === null) {
+    return after === null ? POSITION_GAP : after - POSITION_GAP;
+  }
   if (after === null) return before + POSITION_GAP;
   return (before + after) / 2;
 }

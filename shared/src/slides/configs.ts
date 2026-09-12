@@ -17,7 +17,10 @@ import {
  * slide. Completeness is enforced separately by `validateSlideReady`, so the
  * editor can hold a half-finished slide without throwing.
  */
-export const zDraftUrl = z.union([z.literal(''), zSafeUrl]).optional().default('');
+export const zDraftUrl = z
+  .union([z.literal(''), zSafeUrl])
+  .optional()
+  .default('');
 
 /* ------------------------------------------------------------------ */
 /* Free text                                                           */
@@ -54,7 +57,10 @@ export const zMultipleChoice = zSlideBase.extend({
 
 export const zImageChoice = zSlideBase.extend({
   kind: z.literal('image_choice'),
-  options: z.array(zOption.extend({ imageUrl: zDraftUrl })).max(12).default([]),
+  options: z
+    .array(zOption.extend({ imageUrl: zDraftUrl }))
+    .max(12)
+    .default([]),
   multiSelect: z.boolean().default(false),
   showPercentages: z.boolean().default(true),
 });

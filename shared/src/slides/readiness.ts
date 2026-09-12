@@ -176,7 +176,11 @@ export function validateSlideReady(config: SlideConfig): ReadinessIssue[] {
     case 'scales': {
       issues.push(...needsPrompt(config));
       if (config.statements.filter((s) => s.label.trim()).length === 0) {
-        issues.push({ level: 'error', field: 'statements', message: 'Add at least one statement.' });
+        issues.push({
+          level: 'error',
+          field: 'statements',
+          message: 'Add at least one statement.',
+        });
       }
       if (config.max <= config.min) {
         issues.push({
@@ -236,7 +240,11 @@ export function validateSlideReady(config: SlideConfig): ReadinessIssue[] {
     case 'quiz_match':
       issues.push(...needsPrompt(config));
       if (config.pairs.filter((p) => p.left.trim() && p.right.trim()).length < 2) {
-        issues.push({ level: 'error', field: 'pairs', message: 'Add at least two complete pairs.' });
+        issues.push({
+          level: 'error',
+          field: 'pairs',
+          message: 'Add at least two complete pairs.',
+        });
       }
       break;
 
@@ -298,7 +306,7 @@ export interface DeckReadiness {
 }
 
 export function validateDeckReady(
-  slides: Array<{ id: string; config: SlideConfig; skipped?: boolean }>,
+  slides: { id: string; config: SlideConfig; skipped?: boolean }[],
 ): DeckReadiness {
   const bySlide: Record<string, ReadinessIssue[]> = {};
   let errorCount = 0;

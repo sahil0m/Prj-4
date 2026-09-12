@@ -73,7 +73,7 @@ describe('contrast maths', () => {
 /* ------------------------------------------------------------------ */
 
 /** Every text role that must be legible, per theme. */
-const textRoles: Array<[keyof ColorRoles, number, string]> = [
+const textRoles: [keyof ColorRoles, number, string][] = [
   ['ink', CONTRAST.aaBody, 'primary text'],
   ['inkMuted', CONTRAST.aaBody, 'secondary text'],
   ['inkSubtle', CONTRAST.aaLarge, 'tertiary text'],
@@ -126,7 +126,8 @@ describe.each([
   });
 
   it('defines every role with a real colour', () => {
-    for (const [key, value] of Object.entries(roles)) {
+    for (const key of Object.keys(roles) as (keyof ColorRoles)[]) {
+      const value = roles[key];
       expect(parseColor(value), `${name}.${key} = "${value}"`).not.toBeNull();
     }
   });
@@ -226,7 +227,7 @@ describe('motion', () => {
 
   it('uses an overshooting curve for the signature spring', () => {
     // The third control point above 1 is what produces the bounce.
-    const match = motion.ease.spring.match(/cubic-bezier\(([^)]+)\)/);
+    const match = /cubic-bezier\(([^)]+)\)/.exec(motion.ease.spring);
     expect(match).not.toBeNull();
     const values = match![1]!.split(',').map((n) => Number(n.trim()));
     expect(values[1]!).toBeGreaterThan(1);

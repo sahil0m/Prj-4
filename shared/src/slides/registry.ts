@@ -339,7 +339,12 @@ export const SLIDE_REGISTRY: { [K in SlideKind]: SlideDefinition<K> } = {
     isQuiz: false,
     segmentable: true,
     configSchema: C.zStarRating,
-    defaults: () => ({ ...base, kind: 'star_rating', prompt: 'How would you rate this?', stars: 5 }),
+    defaults: () => ({
+      ...base,
+      kind: 'star_rating',
+      prompt: 'How would you rate this?',
+      stars: 5,
+    }),
     exportColumns: ['Stars', 'Votes'],
   },
   nps: {
@@ -458,7 +463,13 @@ export const SLIDE_REGISTRY: { [K in SlideKind]: SlideDefinition<K> } = {
     isQuiz: false,
     segmentable: false,
     configSchema: C.zLeaderboard,
-    defaults: () => ({ ...base, kind: 'leaderboard', prompt: 'Leaderboard', topN: 10, showPoints: true }),
+    defaults: () => ({
+      ...base,
+      kind: 'leaderboard',
+      prompt: 'Leaderboard',
+      topN: 10,
+      showPoints: true,
+    }),
     exportColumns: ['Rank', 'Participant', 'Points'],
   },
 
