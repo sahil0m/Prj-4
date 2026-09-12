@@ -14,11 +14,35 @@ const userSchema = new Schema(
       maxlength: 320,
     },
 
-    /** Argon2id hash. Never selected by default, so it cannot leak by accident. */
+    /**
+     * Argon2id hash. Never selected by default, so it cannot leak by
+     * accident. Null for accounts created purely through a social login —
+     * those users have no password to hash.
+     */
     passwordHash: {
       type: String,
-      required: true,
+      default: null,
       select: false,
+    },
+
+    /**
+     * Linked social accounts. Storing the provider's stable subject id
+     * rather than the email, because a user can change their email at the
+     * provider and we must still recognise them.
+     */
+    identities: {
+      type: [
+        new Schema(
+          {
+            provider: { type: String, required: true, enum: ['google'] },
+            subject: { type: String, required: true, maxlength: 128 },
+            email: { type: String, default: '', maxlength: 320 },
+            linkedAt: { type: Date, default: Date.now },
+          },
+          { _id: false },
+        ),
+      ],
+      default: [],
     },
 
     name: { type: String, required: true, trim: true, maxlength: 100 },
@@ -58,6 +82,35 @@ const userSchema = new Schema(
 // Fast lookup on login, skipping deleted accounts.
 userSchema.index({ email: 1 }, { unique: true });
 userSchema.index({ deletedAt: 1 });
+// Finding the account behind a social login.
+userSchema.index({ 'identities.provider': 1, 'identities.subject': 1 });
+
+/**
+ * An account must have at least one way in. Without this guard a bug could
+ * leave someone with no password and no linked identity, locked out of their
+ * own data with no recovery path.
+ *
+ * The guard only runs on creation, and on saves where passwordHash was
+ * actually loaded. `passwordHash` is select:false, so an ordinary
+ * findOne().save() round trip has no idea whether a password exists — and
+ * treating "not loaded" as "not set" would reject every normal update.
+ */
+userSchema.pre('validate', function (next) {
+  const hashWasLoaded = this.isNew || this.get('passwordHash') !== undefined;
+  if (!hashWasLoaded) {
+    next();
+    return;
+  }
+
+  const hasPassword = typeof this.passwordHash === 'string' && this.passwordHash.length > 0;
+  const hasIdentity = this.identities.length > 0;
+
+  if (!hasPassword && !hasIdentity) {
+    next(new Error('An account needs either a password or a linked social login.'));
+    return;
+  }
+  next();
+});
 
 export type UserDoc = HydratedDocument<InferSchemaType<typeof userSchema>>;
 

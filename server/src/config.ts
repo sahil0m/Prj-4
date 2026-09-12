@@ -35,8 +35,22 @@ const zEnv = z.object({
     .min(32, 'PRESENTER_TOKEN_SECRET must be at least 32 characters')
     .refine((v) => v !== 'replace-me', 'PRESENTER_TOKEN_SECRET still holds its placeholder value'),
 
+  /** This server's own public URL, used to build the OAuth redirect URI. */
+  SERVER_ORIGIN: z.string().url().default('http://localhost:4000'),
+
   CLIENT_ORIGIN: z.string().url().default('http://localhost:5173'),
   JOIN_ORIGIN: z.string().url().default('http://localhost:5174'),
+
+  /**
+   * Google sign-in. Optional: leaving these unset simply hides the Google
+   * button rather than breaking the server, so a fresh clone runs without
+   * anyone having to register an OAuth app first.
+   */
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+
+  /** Cookie domain in production. Leave unset for localhost. */
+  COOKIE_DOMAIN: z.string().optional(),
 });
 
 export type Env = z.infer<typeof zEnv>;

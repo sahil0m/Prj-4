@@ -1,11 +1,13 @@
 import express, { type Express, type Request, type Response, type NextFunction } from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import { ZodError } from 'zod';
 import { allowedOrigins, isProduction } from './config.js';
 import { logger } from './lib/logger.js';
 import { pingDb } from './lib/db.js';
+import { authRoutes } from './routes/auth.js';
 
 /**
  * Builds the Express application.
@@ -64,6 +66,7 @@ export function createApp(): Express {
   // A 1MB ceiling. Nothing the API accepts is legitimately larger, and an
   // unbounded parser is a trivial denial-of-service vector.
   app.use(express.json({ limit: '1mb' }));
+  app.use(cookieParser());
 
   /**
    * Global rate limit. Deliberately generous, because a single live session
@@ -101,7 +104,9 @@ export function createApp(): Express {
     })();
   });
 
-  /* ---------------- routes mount here ---------------- */
+  /* ---------------- routes ---------------- */
+
+  app.use('/api/auth', authRoutes());
 
   /* ---------------- 404 ---------------- */
 
