@@ -20,6 +20,8 @@ export interface PresenterSession {
   title: string;
   joinCode: string;
   joinSlug: string;
+  joinUrl: string;
+  joinLink: string;
   state: string;
   currentSlideId: string | null;
 }

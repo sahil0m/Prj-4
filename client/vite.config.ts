@@ -10,6 +10,9 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    // Listens on every interface so a phone on the same Wi-Fi can
+    // reach it; localhost alone is unreachable from another device.
+    host: true,
     proxy: {
       '/api': { target: 'http://localhost:4000', changeOrigin: true },
       '/socket.io': { target: 'http://localhost:4000', ws: true },

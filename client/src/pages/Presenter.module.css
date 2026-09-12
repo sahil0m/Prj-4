@@ -89,9 +89,58 @@
   background: color-mix(in srgb, var(--color-caution) 14%, transparent);
 }
 
+/* ---------------- join panel ---------------- */
+
+/*
+ * Sits over the stage while the room is empty. Positioned rather than in
+ * the flow, so its arrival and departure never reflow the slide behind it.
+ */
+.joinPanel {
+  position: absolute;
+  right: clamp(16px, 2.4vw, 40px);
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: var(--layer-sticky);
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: clamp(14px, 1.6vw, 24px);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--elevation-xl);
+}
+
+.qrBox {
+  padding: 8px;
+  border-radius: var(--radius-md);
+  background: #fff;
+  line-height: 0;
+}
+
+.joinPanelHint {
+  margin-top: 6px;
+  font-size: clamp(11px, 0.9vw, 14px);
+  color: var(--color-ink-subtle);
+}
+
+.joinPanelUrl {
+  font-size: clamp(14px, 1.2vw, 19px);
+  font-weight: 650;
+}
+
+.joinPanelCode {
+  font-size: clamp(20px, 1.9vw, 30px);
+  font-weight: 750;
+  letter-spacing: 0.09em;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-accent);
+}
+
 /* ---------------- stage ---------------- */
 
 .stage {
+  position: relative;
   flex: 1;
   display: flex;
   align-items: center;

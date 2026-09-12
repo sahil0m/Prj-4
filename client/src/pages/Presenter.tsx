@@ -17,6 +17,7 @@ import {
 import { definitionFor, type SlideKind } from '@pulse/shared';
 import { usePresenter } from '../lib/presenter-store';
 import { Results } from '../components/Results';
+import { QrCode } from '../components/QrCode';
 import { Splash } from '../components/Splash';
 import styles from './Presenter.module.css';
 
@@ -127,8 +128,9 @@ export function Presenter() {
   const slide = slides[index] ?? slides[0];
   const answerable = slide ? definitionFor(slide.kind as SlideKind).answerable : false;
 
-  const joinHost = window.location.hostname;
-  const joinUrl = `${joinHost}:5174`;
+  // The server tells us where the audience should go. The browser cannot:
+  // this tab may be on localhost, which no other device can reach.
+  const joinUrl = session.joinUrl.replace(/^https?:\/\//, '');
 
   return (
     <div className={styles.page} data-fullscreen={fullscreen}>
@@ -154,6 +156,28 @@ export function Presenter() {
           </span>
         </div>
       </header>
+
+      {/* ---------------- how to join ---------------- */}
+      {/* Large while the room is empty, because that is when people need it;
+          it steps aside once answers start arriving. */}
+      <AnimatePresence>
+        {(state?.participantCount ?? 0) === 0 && (
+          <motion.aside
+            className={styles.joinPanel}
+            initial={{ opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.96 }}
+            transition={{ duration: 0.3 }}
+          >
+            <div className={styles.qrBox}>
+              <QrCode value={session.joinLink} size={168} />
+            </div>
+            <p className={styles.joinPanelHint}>Scan to join, or go to</p>
+            <p className={styles.joinPanelUrl}>{joinUrl}</p>
+            <p className={styles.joinPanelCode}>{formatCode(session.joinCode)}</p>
+          </motion.aside>
+        )}
+      </AnimatePresence>
 
       {/* ---------------- stage ---------------- */}
       <main className={styles.stage}>

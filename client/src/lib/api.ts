@@ -296,6 +296,10 @@ export interface LiveSession {
   title: string;
   joinCode: string;
   joinSlug: string;
+  /** Where the audience should go, as the server knows itself. */
+  joinUrl: string;
+  /** The same, with the code already filled in — used for the QR code. */
+  joinLink: string;
   state: string;
   mode: string;
   currentSlideId: string | null;

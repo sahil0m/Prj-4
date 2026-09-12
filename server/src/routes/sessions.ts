@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import type { Types } from 'mongoose';
+import { env } from '../config.js';
 import { Session } from '../models/index.js';
 import { requireAuth, type AuthedRequest } from '../middleware/requireAuth.js';
 import * as sessions from '../services/sessions.js';
@@ -133,6 +134,12 @@ function toPublicSession(session: Awaited<ReturnType<typeof sessions.startSessio
     title: session.title,
     joinCode: session.joinCode,
     joinSlug: session.joinSlug,
+    // Built from the server's own configuration rather than guessed by the
+    // browser: the presenter's machine knows its address, but the tab
+    // showing this page may have been opened on localhost, which is not
+    // reachable from anyone else's phone.
+    joinUrl: env.JOIN_ORIGIN,
+    joinLink: `${env.JOIN_ORIGIN}/?code=${session.joinCode}`,
     state: session.state,
     mode: session.mode,
     currentSlideId: session.currentSlideId ?? null,
