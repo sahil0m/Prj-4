@@ -16,6 +16,8 @@ import {
   Presentation,
 } from 'lucide-react';
 import { definitionFor, type SlideKind } from '@pulse/shared';
+import { api, ApiError } from '../lib/api';
+import { toast } from 'sonner';
 import { useDeck, useSelectedSlide } from '../lib/deck-store';
 import { SlidePicker } from '../components/SlidePicker';
 import { SlideForm } from '../components/SlideForm';
@@ -47,6 +49,32 @@ export function DeckEditor() {
 
   const slide = useSelectedSlide();
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [starting, setStarting] = useState(false);
+
+  /**
+   * Starts a live session and moves to the presenter view.
+   *
+   * The server reuses an already-live session for this deck rather than
+   * starting a second one, so pressing Present twice cannot strand the
+   * people who joined the first.
+   */
+  const present = async () => {
+    if (!deck || starting) return;
+
+    if (deck.slides.length === 0) {
+      toast.error('Add a slide before presenting.');
+      return;
+    }
+
+    setStarting(true);
+    try {
+      const { session } = await api.startSession(deck.id);
+      await navigate(`/present/${session.id}`);
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'The session could not be started.');
+      setStarting(false);
+    }
+  };
 
   useEffect(() => {
     if (deckId) void load(deckId);
@@ -108,9 +136,17 @@ export function DeckEditor() {
 
         <div className={styles.headerRight}>
           <SaveIndicator />
-          <button type="button" className={styles.presentButton} disabled title="Coming next">
+          <button
+            type="button"
+            className={styles.presentButton}
+            onClick={() => {
+              void present();
+            }}
+            disabled={starting || deck.slides.length === 0}
+            title={deck.slides.length === 0 ? 'Add a slide first' : 'Start a live session'}
+          >
             <Presentation size={16} />
-            Present
+            {starting ? 'Starting…' : 'Present'}
           </button>
         </div>
       </header>

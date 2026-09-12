@@ -1,0 +1,416 @@
+/*
+ * The projector view.
+ *
+ * Sized in viewport units throughout, because the same layout has to work
+ * on a laptop, a projector and a wall display without a breakpoint for each.
+ */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+/* ---------------- top bar ---------------- */
+
+.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-lg);
+  flex: none;
+  padding: clamp(10px, 1.4vh, 20px) clamp(16px, 2.4vw, 40px);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.joinInfo {
+  display: flex;
+  align-items: center;
+  gap: clamp(8px, 1vw, 16px);
+  min-width: 0;
+}
+
+.joinLabel {
+  font-size: clamp(11px, 1vw, 16px);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-ink-subtle);
+}
+
+.joinUrl {
+  font-size: clamp(13px, 1.3vw, 22px);
+  font-weight: 600;
+  color: var(--color-ink-muted);
+}
+
+/* The code is the single most important thing on screen until people have
+   joined, so it is given the most contrast and the most weight. */
+.joinCodeBox {
+  padding: clamp(4px, 0.6vh, 10px) clamp(10px, 1.2vw, 20px);
+  border-radius: var(--radius-md);
+  font-size: clamp(20px, 2.4vw, 42px);
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  background: var(--accent-gradient);
+  box-shadow: var(--accent-glow);
+}
+
+.topRight {
+  display: flex;
+  align-items: center;
+  gap: clamp(10px, 1.2vw, 20px);
+  flex: none;
+}
+
+.participants {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: clamp(5px, 0.7vh, 10px) clamp(10px, 1.1vw, 16px);
+  border-radius: var(--radius-pill);
+  font-size: clamp(14px, 1.4vw, 22px);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  background: color-mix(in srgb, var(--color-ink) 7%, transparent);
+}
+
+.offline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: var(--radius-pill);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-caution);
+  background: color-mix(in srgb, var(--color-caution) 14%, transparent);
+}
+
+/* ---------------- stage ---------------- */
+
+.stage {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  padding: clamp(18px, 3vh, 48px) clamp(20px, 4vw, 72px);
+}
+
+.slide {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(10px, 2vh, 28px);
+  width: 100%;
+  max-width: 1500px;
+  height: 100%;
+}
+
+.prompt {
+  font-size: clamp(26px, 3.6vw, 62px);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  text-align: center;
+  text-wrap: balance;
+  flex: none;
+}
+
+.subtitle {
+  font-size: clamp(15px, 1.5vw, 26px);
+  color: var(--color-ink-muted);
+  text-align: center;
+  text-wrap: balance;
+  flex: none;
+}
+
+.results {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.hidden {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-sm);
+  color: var(--color-ink-subtle);
+  text-align: center;
+}
+
+.hidden p {
+  font-size: clamp(16px, 1.7vw, 26px);
+  font-weight: 600;
+  color: var(--color-ink-muted);
+}
+
+.hidden span {
+  font-size: clamp(13px, 1.2vw, 18px);
+}
+
+/* ---------------- content slides ---------------- */
+
+.bigNumber {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-sm);
+}
+
+.bigNumberValue {
+  font-size: clamp(70px, 13vw, 220px);
+  font-weight: 750;
+  line-height: 1;
+  letter-spacing: -0.05em;
+  background: var(--gradient-aurora);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.bigNumberCaption {
+  font-size: clamp(15px, 1.7vw, 28px);
+  color: var(--color-ink-muted);
+}
+
+.quote {
+  max-width: 22ch;
+  text-align: center;
+}
+
+.quote p {
+  font-size: clamp(24px, 3.4vw, 58px);
+  font-weight: 600;
+  line-height: 1.22;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.quote cite {
+  display: block;
+  margin-top: var(--space-lg);
+  font-size: clamp(14px, 1.4vw, 22px);
+  font-style: normal;
+  color: var(--color-ink-muted);
+}
+
+.bullets {
+  display: grid;
+  gap: clamp(10px, 1.8vh, 22px);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-width: 26ch;
+}
+
+.bullets li {
+  position: relative;
+  padding-left: 1.2em;
+  font-size: clamp(18px, 2.2vw, 38px);
+  line-height: 1.3;
+}
+
+.bullets li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.52em;
+  width: 0.38em;
+  height: 0.38em;
+  border-radius: 50%;
+  background: var(--color-accent);
+}
+
+.contentImage {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: var(--radius-lg);
+}
+
+.contentPlaceholder,
+.paragraph {
+  font-size: clamp(16px, 1.8vw, 30px);
+  line-height: 1.45;
+  text-align: center;
+  max-width: 34ch;
+  color: var(--color-ink-muted);
+  text-wrap: balance;
+}
+
+/* ---------------- controls ---------------- */
+
+.controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-lg);
+  flex: none;
+  padding: clamp(8px, 1.2vh, 16px) clamp(16px, 2.4vw, 40px);
+  border-top: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-canvas) 70%, transparent);
+}
+
+/* In fullscreen the controls fade back until the presenter reaches for them,
+   so the room sees the slide and not the furniture. */
+.page[data-fullscreen='true'] .controls {
+  opacity: 0.18;
+  transition: opacity var(--duration-base) var(--ease-standard);
+}
+
+.page[data-fullscreen='true'] .controls:hover,
+.page[data-fullscreen='true'] .controls:focus-within {
+  opacity: 1;
+}
+
+.controlGroup {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.controlButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 0 13px;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-ink-muted);
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+}
+
+.controlButton:hover:not(:disabled) {
+  color: var(--color-ink);
+  background: color-mix(in srgb, var(--color-ink) 8%, transparent);
+}
+
+.controlButton:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.controlButton[data-active='true'] {
+  color: var(--color-positive);
+}
+
+.controlLabel {
+  font-size: 13.5px;
+}
+
+.endButton:hover {
+  color: var(--color-danger);
+  background: color-mix(in srgb, var(--color-danger) 12%, transparent);
+}
+
+.position {
+  padding: 0 10px;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-ink-subtle);
+}
+
+/* ---------------- confirm ---------------- */
+
+.confirmOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--layer-modal);
+  display: grid;
+  place-items: center;
+  padding: var(--space-lg);
+  background: rgba(4, 6, 16, 0.66);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.confirmBox {
+  width: 100%;
+  max-width: 400px;
+  padding: var(--space-xl);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--elevation-xl);
+}
+
+.confirmTitle {
+  font-size: 19px;
+  font-weight: 650;
+  margin-bottom: var(--space-sm);
+}
+
+.confirmBody {
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--color-ink-muted);
+  margin-bottom: var(--space-xl);
+}
+
+.confirmActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+}
+
+.ghostButton {
+  min-height: 42px;
+  padding: 0 18px;
+  border-radius: var(--radius-md);
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--color-ink-muted);
+  border: 1px solid var(--color-border-strong);
+}
+
+.ghostButton:hover {
+  color: var(--color-ink);
+}
+
+.dangerButton {
+  min-height: 42px;
+  padding: 0 18px;
+  border-radius: var(--radius-md);
+  font-size: 14.5px;
+  font-weight: 650;
+  color: #fff;
+  background: var(--color-danger);
+}
+
+.dangerButton:hover {
+  filter: brightness(1.08);
+}
+
+/* ---------------- error ---------------- */
+
+.errorPage {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--space-md);
+  min-height: 100dvh;
+  padding: var(--space-2xl);
+  text-align: center;
+}
+
+.errorTitle {
+  font-size: 21px;
+  font-weight: 650;
+}
+
+.errorBody {
+  font-size: 15px;
+  color: var(--color-ink-muted);
+  max-width: 44ch;
+}

@@ -270,7 +270,40 @@ export const api = {
 
   moveSlide: (deckId: string, slideId: string, toIndex: number): Promise<DeckResponse> =>
     request(`/decks/${deckId}/slides/${slideId}/move`, { method: 'POST', body: { toIndex } }),
+
+  /* ---------------- sessions ---------------- */
+
+  startSession: (deckId: string): Promise<{ session: LiveSession }> =>
+    request('/sessions', { method: 'POST', body: { deckId } }),
+
+  getSession: (
+    sessionId: string,
+  ): Promise<{
+    session: LiveSession;
+    snapshot: {
+      title: string;
+      slides: { id: string; kind: string; position: number; config: Record<string, unknown> }[];
+    };
+  }> => request(`/sessions/${sessionId}`),
+
+  endSession: (sessionId: string): Promise<{ session: LiveSession }> =>
+    request(`/sessions/${sessionId}/end`, { method: 'POST' }),
 };
+
+export interface LiveSession {
+  id: string;
+  deckId: string;
+  title: string;
+  joinCode: string;
+  joinSlug: string;
+  state: string;
+  mode: string;
+  currentSlideId: string | null;
+  participationOpen: boolean;
+  resultsVisible: boolean;
+  startedAt: string;
+  endedAt: string | null;
+}
 
 /* ------------------------------------------------------------------ */
 /* Deck shapes                                                         */

@@ -5,6 +5,7 @@ import { useAuth } from './lib/auth-store';
 import { SignIn } from './pages/SignIn';
 import { Dashboard } from './pages/Dashboard';
 import { DeckEditor } from './pages/DeckEditor';
+import { Presenter } from './pages/Presenter';
 import { Splash } from './components/Splash';
 
 /**
@@ -43,6 +44,11 @@ function Shell() {
       <Route
         path="/decks/:deckId"
         element={status === 'authenticated' ? <DeckEditor /> : <Navigate to="/signin" replace />}
+      />
+
+      <Route
+        path="/present/:sessionId"
+        element={status === 'authenticated' ? <Presenter /> : <Navigate to="/signin" replace />}
       />
 
       <Route path="*" element={<Navigate to="/" replace />} />

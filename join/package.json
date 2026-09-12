@@ -1,0 +1,26 @@
+{
+  "name": "@pulse/join",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 5174",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --port 5174",
+    "typecheck": "tsc --noEmit"
+  },
+  "//": "Deliberately thin. This page opens on a phone on conference wifi, and every dependency is weight a hundred people download at once. No component library, no animation library, no icon package — the few icons here are inline SVG.",
+  "dependencies": {
+    "@pulse/shared": "*",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "socket.io-client": "^4.8.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.2",
+    "@types/react-dom": "^19.0.2",
+    "@vitejs/plugin-react": "^4.3.4",
+    "preact": "^10.29.8",
+    "vite": "^6.0.7"
+  }
+}

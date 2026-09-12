@@ -1,0 +1,437 @@
+/*
+ * Every interactive target here is at least 44px, the smallest a thumb can
+ * hit reliably. Nothing relies on hover, which does not exist on a phone.
+ */
+
+.stack {
+  display: grid;
+  gap: var(--space-md);
+}
+
+.hint {
+  font-size: 13.5px;
+  color: var(--color-ink-subtle);
+  text-align: center;
+}
+
+.hint[data-warn='true'] {
+  color: var(--color-caution);
+}
+
+.watchOnly {
+  padding: var(--space-2xl) var(--space-lg);
+  text-align: center;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--color-ink-muted);
+}
+
+/* ---------------- choice ---------------- */
+
+.options {
+  display: grid;
+  gap: 10px;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 14px 16px;
+  text-align: left;
+  border-radius: var(--radius-lg);
+  font-size: 16px;
+  color: var(--color-ink);
+  background: color-mix(in srgb, var(--color-ink) 6%, transparent);
+  border: 2px solid transparent;
+  /* Stops the grey flash iOS paints over a tapped element. */
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    transform 0.08s var(--ease-standard);
+}
+
+.option:active:not(:disabled) {
+  transform: scale(0.985);
+}
+
+.option[data-picked='true'] {
+  background: color-mix(in srgb, var(--color-accent) 20%, transparent);
+  border-color: var(--color-accent);
+}
+
+.option:disabled {
+  opacity: 0.5;
+}
+
+.optionKey {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 16%, transparent);
+}
+
+.option[data-picked='true'] .optionKey {
+  color: #fff;
+  background: var(--color-accent);
+}
+
+.optionLabel {
+  min-width: 0;
+  line-height: 1.35;
+}
+
+/* ---------------- true / false ---------------- */
+
+.twoUp {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.bigChoice {
+  min-height: 108px;
+  border-radius: var(--radius-lg);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--color-ink);
+  border: 2px solid var(--color-border-strong);
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.08s var(--ease-standard);
+}
+
+.bigChoice:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.trueChoice {
+  background: color-mix(in srgb, var(--color-positive) 16%, transparent);
+  border-color: color-mix(in srgb, var(--color-positive) 50%, transparent);
+}
+
+.falseChoice {
+  background: color-mix(in srgb, var(--color-danger) 14%, transparent);
+  border-color: color-mix(in srgb, var(--color-danger) 45%, transparent);
+}
+
+.bigChoice:disabled {
+  opacity: 0.5;
+}
+
+/* ---------------- text ---------------- */
+
+.input,
+.textarea {
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: var(--radius-lg);
+  /* 16px exactly: anything smaller makes iOS Safari zoom on focus. */
+  font-size: 16px;
+  font-family: inherit;
+  color: var(--color-ink);
+  background: color-mix(in srgb, var(--color-ink) 6%, transparent);
+  border: 2px solid var(--color-border);
+  transition: border-color var(--duration-fast) var(--ease-standard);
+}
+
+.textarea {
+  resize: none;
+  line-height: 1.5;
+}
+
+.input::placeholder,
+.textarea::placeholder {
+  color: var(--color-ink-subtle);
+}
+
+.input:focus,
+.textarea:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.numberRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.numberInput {
+  text-align: center;
+  font-size: 26px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.unit {
+  flex: none;
+  font-size: 16px;
+  color: var(--color-ink-muted);
+}
+
+/* ---------------- stars ---------------- */
+
+.stars {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+}
+
+.star {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  color: color-mix(in srgb, var(--color-ink) 22%, transparent);
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    color var(--duration-fast) var(--ease-standard),
+    transform 0.1s var(--ease-spring);
+}
+
+.star[data-on='true'] {
+  color: var(--color-caution);
+}
+
+.star:active:not(:disabled) {
+  transform: scale(1.15);
+}
+
+/* ---------------- NPS ---------------- */
+
+.npsGrid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 7px;
+}
+
+.npsButton {
+  min-height: 52px;
+  border-radius: var(--radius-md);
+  font-size: 17px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-ink);
+  background: color-mix(in srgb, var(--color-ink) 7%, transparent);
+  border: 2px solid transparent;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.npsButton[data-picked='true'][data-band='detractor'] {
+  background: color-mix(in srgb, var(--color-danger) 26%, transparent);
+  border-color: var(--color-danger);
+}
+
+.npsButton[data-picked='true'][data-band='passive'] {
+  background: color-mix(in srgb, var(--color-caution) 26%, transparent);
+  border-color: var(--color-caution);
+}
+
+.npsButton[data-picked='true'][data-band='promoter'] {
+  background: color-mix(in srgb, var(--color-positive) 26%, transparent);
+  border-color: var(--color-positive);
+}
+
+.npsLegend {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12.5px;
+  color: var(--color-ink-subtle);
+}
+
+/* ---------------- scales ---------------- */
+
+.scaleRow {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--color-ink) 5%, transparent);
+}
+
+.scaleLabel {
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.scaleButtons {
+  display: flex;
+  gap: 6px;
+}
+
+.scaleButton {
+  flex: 1;
+  min-height: 46px;
+  border-radius: var(--radius-md);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-ink);
+  background: color-mix(in srgb, var(--color-ink) 8%, transparent);
+  border: 2px solid transparent;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.scaleButton[data-picked='true'] {
+  color: #fff;
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+/* ---------------- ranking ---------------- */
+
+.rankList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 8px;
+  counter-reset: rank;
+}
+
+.rankItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--color-ink) 6%, transparent);
+}
+
+.rankNumber {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 16%, transparent);
+}
+
+.rankLabel {
+  flex: 1;
+  min-width: 0;
+  font-size: 15px;
+  line-height: 1.3;
+}
+
+.rankControls {
+  display: flex;
+  gap: 2px;
+  flex: none;
+}
+
+.rankButton {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  color: var(--color-ink-muted);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.rankButton:disabled {
+  opacity: 0.25;
+}
+
+.rankButton:active:not(:disabled) {
+  background: color-mix(in srgb, var(--color-ink) 12%, transparent);
+}
+
+/* ---------------- points ---------------- */
+
+.budget {
+  padding: 12px;
+  border-radius: var(--radius-md);
+  text-align: center;
+  font-size: 14.5px;
+  color: var(--color-ink-muted);
+  background: color-mix(in srgb, var(--color-ink) 6%, transparent);
+}
+
+.budget[data-spent='true'] {
+  color: var(--color-positive);
+  background: color-mix(in srgb, var(--color-positive) 14%, transparent);
+}
+
+.budget strong {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--color-ink);
+}
+
+.budget[data-spent='true'] strong {
+  color: var(--color-positive);
+}
+
+.pointsRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--color-ink) 6%, transparent);
+}
+
+.pointsLabel {
+  flex: 1;
+  min-width: 0;
+  font-size: 15px;
+}
+
+.pointsInput {
+  flex: none;
+  width: 74px;
+  padding: 10px;
+  border-radius: var(--radius-md);
+  text-align: center;
+  font-size: 16px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-ink);
+  background: color-mix(in srgb, var(--color-ink) 9%, transparent);
+  border: 2px solid transparent;
+}
+
+.pointsInput:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+/* ---------------- submit ---------------- */
+
+.submit {
+  width: 100%;
+  min-height: 54px;
+  margin-top: 2px;
+  border-radius: var(--radius-lg);
+  font-size: 17px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--accent-gradient);
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    transform 0.08s var(--ease-standard),
+    opacity var(--duration-fast) var(--ease-standard);
+}
+
+.submit:active:not(:disabled) {
+  transform: scale(0.985);
+}
+
+.submit:disabled {
+  opacity: 0.4;
+  background: color-mix(in srgb, var(--color-ink) 14%, transparent);
+}

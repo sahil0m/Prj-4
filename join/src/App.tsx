@@ -1,0 +1,460 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { SessionState, ParticipantSlide } from '@pulse/shared';
+import { SessionConnection, clearQueue, type ConnectionStatus } from './lib/session';
+import { AnswerInput } from './components/AnswerInput';
+import styles from './App.module.css';
+
+/**
+ * The participant app.
+ *
+ * One screen at a time, and never more than one decision on screen. The
+ * person holding this is looking at a projector, not at their phone.
+ */
+
+type Phase = 'code' | 'name' | 'live' | 'ended';
+
+export function App() {
+  const [phase, setPhase] = useState<Phase>('code');
+  const [code, setCode] = useState(() => codeFromUrl());
+  const [name, setName] = useState('');
+  const [collectNames, setCollectNames] = useState(false);
+
+  const [sessionTitle, setSessionTitle] = useState('');
+  const [state, setState] = useState<SessionState | null>(null);
+  const [slide, setSlide] = useState<ParticipantSlide | null>(null);
+  const [status, setStatus] = useState<ConnectionStatus>('connecting');
+
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [sent, setSent] = useState(false);
+  const [pending, setPending] = useState(0);
+
+  const connection = useRef<SessionConnection | null>(null);
+
+  /** A fresh slide clears the "sent" state so the new question is answerable. */
+  const showSlide = useCallback((next: ParticipantSlide | null) => {
+    setSlide(next);
+    setSent(next?.answered === true);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      connection.current?.close();
+    };
+  }, []);
+
+  const connect = async (joinCode: string, displayName?: string) => {
+    setBusy(true);
+    setError(null);
+
+    const conn = new SessionConnection({
+      onState: setState,
+      onSlide: showSlide,
+      onResults: () => {
+        // Participant-side results land with the charts; ignored for now.
+      },
+      onEnded: () => {
+        setPhase('ended');
+        clearQueue();
+      },
+      onStatus: setStatus,
+      onAnswerAccepted: () => {
+        setPending(connection.current?.pendingCount ?? 0);
+        setSent(true);
+      },
+    });
+
+    const result = await conn.join(joinCode, displayName);
+    setBusy(false);
+
+    if (!result.ok) {
+      setError(result.message);
+      conn.close();
+      return;
+    }
+
+    connection.current = conn;
+    setState(result.session);
+    showSlide(result.slide);
+    setCollectNames(result.collectNames);
+
+    // Ask for a name only when the deck wants one and we do not have it yet.
+    if (result.collectNames && result.displayName === '' && displayName === undefined) {
+      setPhase('name');
+      return;
+    }
+
+    setPhase('live');
+  };
+
+  const submit = (payload: unknown) => {
+    if (!slide || !connection.current) return;
+
+    // Marked as sent immediately. The answer is queued and retried if the
+    // network is down, so telling the person it failed would be a lie.
+    setSent(true);
+    void connection.current.answer(slide.id, payload).then((result) => {
+      setPending(connection.current?.pendingCount ?? 0);
+      if (!result.ok) {
+        setSent(false);
+        setError(result.message);
+      }
+    });
+  };
+
+  /* ---------------- screens ---------------- */
+
+  if (phase === 'code') {
+    return (
+      <CodeScreen
+        code={code}
+        setCode={setCode}
+        busy={busy}
+        error={error}
+        onJoin={() => {
+          void connect(code);
+        }}
+        onTitle={setSessionTitle}
+      />
+    );
+  }
+
+  if (phase === 'name') {
+    return (
+      <NameScreen
+        name={name}
+        setName={setName}
+        busy={busy}
+        onSubmit={() => {
+          void connect(code, name.trim() === '' ? 'Guest' : name.trim());
+        }}
+      />
+    );
+  }
+
+  if (phase === 'ended') {
+    return (
+      <Centered>
+        <div className={styles.endMark} aria-hidden="true">
+          <Tick />
+        </div>
+        <h1 className={styles.endTitle}>That is the end</h1>
+        <p className={styles.endBody}>Thanks for taking part.</p>
+        <button
+          type="button"
+          className={styles.ghostButton}
+          onClick={() => {
+            window.location.reload();
+          }}
+        >
+          Join another session
+        </button>
+      </Centered>
+    );
+  }
+
+  /* ---------------- live ---------------- */
+
+  const open = state?.participationOpen === true && slide !== null;
+  const answerable = open && !sent;
+
+  return (
+    <div className={styles.live}>
+      <header className={styles.bar}>
+        <span className={styles.barTitle}>{sessionTitle || 'Live'}</span>
+        <ConnectionBadge status={status} pending={pending} />
+      </header>
+
+      <main className={styles.stage}>
+        {!slide ? (
+          <Waiting message="Waiting for the presenter" />
+        ) : sent ? (
+          <Sent pending={pending} />
+        ) : !open ? (
+          <Waiting message="This question is closed" />
+        ) : (
+          <>
+            <h1 className={styles.prompt}>{promptOf(slide)}</h1>
+            {subtitleOf(slide) !== '' && <p className={styles.subtitle}>{subtitleOf(slide)}</p>}
+
+            <div className={styles.answer}>
+              <AnswerInput
+                kind={slide.kind}
+                config={slide.config}
+                disabled={!answerable}
+                onSubmit={submit}
+              />
+            </div>
+          </>
+        )}
+
+        {error !== null && (
+          <p className={styles.error} role="alert">
+            {error}
+          </p>
+        )}
+      </main>
+
+      {collectNames && name !== '' && (
+        <footer className={styles.footer}>Answering as {name}</footer>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Screens                                                             */
+/* ------------------------------------------------------------------ */
+
+function CodeScreen({
+  code,
+  setCode,
+  busy,
+  error,
+  onJoin,
+  onTitle,
+}: {
+  code: string;
+  setCode: (value: string) => void;
+  busy: boolean;
+  error: string | null;
+  onJoin: () => void;
+  onTitle: (title: string) => void;
+}) {
+  const [checking, setChecking] = useState(false);
+  const [found, setFound] = useState<string | null>(null);
+
+  // Looks the code up as soon as it is complete, so the person sees the
+  // session name before committing — and a typo is caught immediately.
+  useEffect(() => {
+    if (code.length !== 6) {
+      setFound(null);
+      return;
+    }
+
+    let cancelled = false;
+    setChecking(true);
+
+    void fetch(`/api/sessions/lookup?code=${code}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { title?: string } | null) => {
+        if (cancelled) return;
+        const title = data?.title ?? null;
+        setFound(title);
+        if (title) onTitle(title);
+      })
+      .catch(() => {
+        if (!cancelled) setFound(null);
+      })
+      .finally(() => {
+        if (!cancelled) setChecking(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [code, onTitle]);
+
+  return (
+    <Centered>
+      <div className={styles.logo} aria-hidden="true">
+        <Waves />
+      </div>
+
+      <h1 className={styles.joinTitle}>Join the session</h1>
+      <p className={styles.joinBody}>Enter the 6-digit code on the screen.</p>
+
+      <input
+        className={styles.codeInput}
+        value={code}
+        inputMode="numeric"
+        autoComplete="one-time-code"
+        placeholder="000000"
+        maxLength={6}
+        aria-label="Six digit join code"
+        onChange={(e) => {
+          setCode(e.currentTarget.value.replace(/\D/g, '').slice(0, 6));
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && code.length === 6) onJoin();
+        }}
+      />
+
+      <div className={styles.lookup}>
+        {checking && <span className={styles.lookupChecking}>Checking…</span>}
+        {!checking && found !== null && <span className={styles.lookupFound}>{found}</span>}
+        {!checking && code.length === 6 && found === null && (
+          <span className={styles.lookupMissing}>No session with that code</span>
+        )}
+      </div>
+
+      <button
+        type="button"
+        className={styles.primaryButton}
+        disabled={code.length !== 6 || busy || found === null}
+        onClick={onJoin}
+      >
+        {busy ? 'Joining…' : 'Join'}
+      </button>
+
+      {error !== null && (
+        <p className={styles.error} role="alert">
+          {error}
+        </p>
+      )}
+    </Centered>
+  );
+}
+
+function NameScreen({
+  name,
+  setName,
+  busy,
+  onSubmit,
+}: {
+  name: string;
+  setName: (value: string) => void;
+  busy: boolean;
+  onSubmit: () => void;
+}) {
+  return (
+    <Centered>
+      <h1 className={styles.joinTitle}>What should we call you?</h1>
+      <p className={styles.joinBody}>This appears next to your answers.</p>
+
+      <input
+        className={styles.nameInput}
+        value={name}
+        maxLength={60}
+        autoFocus
+        placeholder="Your name"
+        enterKeyHint="go"
+        onChange={(e) => {
+          setName(e.currentTarget.value);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') onSubmit();
+        }}
+      />
+
+      <button type="button" className={styles.primaryButton} disabled={busy} onClick={onSubmit}>
+        {busy ? 'Joining…' : 'Continue'}
+      </button>
+
+      <button type="button" className={styles.ghostButton} disabled={busy} onClick={onSubmit}>
+        Stay anonymous
+      </button>
+    </Centered>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Pieces                                                              */
+/* ------------------------------------------------------------------ */
+
+function Centered({ children }: { children: React.ReactNode }) {
+  return (
+    <div className={styles.centered}>
+      <div className={styles.centeredInner}>{children}</div>
+    </div>
+  );
+}
+
+function Waiting({ message }: { message: string }) {
+  return (
+    <div className={styles.waiting}>
+      <div className={styles.pulse} aria-hidden="true">
+        <span />
+        <span />
+        <span />
+      </div>
+      <p className={styles.waitingText}>{message}</p>
+    </div>
+  );
+}
+
+function Sent({ pending }: { pending: number }) {
+  return (
+    <div className={styles.waiting}>
+      <div className={styles.sentMark} aria-hidden="true">
+        <Tick />
+      </div>
+      <p className={styles.sentTitle}>Answer sent</p>
+      <p className={styles.waitingText}>
+        {pending > 0 ? 'Saved — it will send when you are back online.' : 'Look at the screen.'}
+      </p>
+    </div>
+  );
+}
+
+function ConnectionBadge({ status, pending }: { status: ConnectionStatus; pending: number }) {
+  if (status === 'connected' && pending === 0) {
+    return <span className={styles.badge} data-status="connected" aria-label="Connected" />;
+  }
+
+  return (
+    <span className={styles.badgeText} data-status={status}>
+      {pending > 0
+        ? `${String(pending)} saved`
+        : status === 'connected'
+          ? 'Online'
+          : 'Reconnecting…'}
+    </span>
+  );
+}
+
+function Tick() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="26"
+      height="26"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="3"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M4 12.5l5.5 5.5L20 7" />
+    </svg>
+  );
+}
+
+function Waves() {
+  return (
+    <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor" aria-hidden="true">
+      <circle cx="12" cy="12" r="2.6" />
+      <path
+        d="M7.4 7.4a6.5 6.5 0 000 9.2M16.6 16.6a6.5 6.5 0 000-9.2M4.2 4.2a11 11 0 000 15.6M19.8 19.8a11 11 0 000-15.6"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Helpers                                                             */
+/* ------------------------------------------------------------------ */
+
+/** A code in the URL — from a QR scan — skips straight past typing it. */
+function codeFromUrl(): string {
+  const fromQuery = new URLSearchParams(window.location.search).get('code');
+  if (fromQuery && /^\d{6}$/.test(fromQuery)) return fromQuery;
+
+  const fromPath = /\/(\d{6})$/.exec(window.location.pathname);
+  return fromPath?.[1] ?? '';
+}
+
+function promptOf(slide: ParticipantSlide): string {
+  const prompt = slide.config.prompt;
+  return typeof prompt === 'string' && prompt.trim() !== '' ? prompt : 'Your answer';
+}
+
+function subtitleOf(slide: ParticipantSlide): string {
+  const subtitle = slide.config.subtitle;
+  return typeof subtitle === 'string' ? subtitle : '';
+}
