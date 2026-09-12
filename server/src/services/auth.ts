@@ -452,7 +452,9 @@ export function toPublicUser(user: UserDoc): PublicUser {
     avatarUrl: user.avatarUrl,
     locale: user.locale,
     emailVerified: user.emailVerifiedAt !== null,
-    hasPassword: Boolean(user.passwordHash),
+    // The stored flag, not the hash: passwordHash is select:false and is
+    // absent on most queries. See the note on the field in models/User.ts.
+    hasPassword: user.hasPassword,
     providers: user.identities.map((i) => i.provider),
   };
 }

@@ -1,0 +1,27 @@
+.splash {
+  display: grid;
+  place-items: center;
+  min-height: 100dvh;
+}
+
+.inner {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-lg);
+}
+
+.mark {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-lg);
+  background: var(--gradient-iris);
+  color: #fff;
+  box-shadow: var(--accent-glow);
+}
+
+.message {
+  font-size: 14px;
+  color: var(--color-ink-muted);
+}

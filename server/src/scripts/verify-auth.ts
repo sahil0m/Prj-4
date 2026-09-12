@@ -469,6 +469,32 @@ async function main() {
     assert(publicUser.hasPassword, 'hasPassword flag should be true here');
   });
 
+  // The bug this guards: hasPassword used to be derived from passwordHash,
+  // which is select:false. Any path that did not ask for the hash — refresh,
+  // for one — reported a password account as having no password, which would
+  // let the account-settings screen overwrite a credential without asking for
+  // the current one. Load the user the ordinary way, with no projection.
+  await check('hasPassword survives a query that omits the hash', async () => {
+    const u = await User.findById(registered.user._id);
+    assert(u, 'user missing');
+    assert(u.passwordHash === undefined, 'hash should not be selected here');
+    assert(auth.toPublicUser(u).hasPassword, 'hasPassword must not depend on the projection');
+  });
+
+  await check('a refreshed session still reports hasPassword', async () => {
+    const fresh = await auth.register(
+      { email: `proj-${stamp}@example.test`, password: PASSWORD, name: 'Projection Probe' },
+      DEVICE,
+    );
+    createdUserIds.push(fresh.user._id.toString());
+
+    const rotated = await auth.refresh(fresh.session.refreshToken, DEVICE);
+    assert(
+      auth.toPublicUser(rotated.user).hasPassword,
+      'refresh reported a password account as passwordless',
+    );
+  });
+
   /* ---------------- cleanup ---------------- */
 
   process.stdout.write(`\n${D}Cleaning up...${X}\n`);

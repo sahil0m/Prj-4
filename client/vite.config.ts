@@ -22,10 +22,20 @@ export default defineConfig({
       output: {
         // Split vendor code so the app shell can be cached independently
         // of the parts that change on every deploy.
-        manualChunks: {
-          react: ['react', 'react-dom', 'react-router-dom'],
-          motion: ['motion'],
-          charts: ['d3-scale', 'd3-shape', 'd3-array', 'd3-interpolate', 'd3-force'],
+        //
+        // The function form, rather than the object form, because it only
+        // names a chunk for modules that are actually in the graph. The
+        // object form emits an empty chunk (and a build warning) for any
+        // group nothing imports yet, and a build that always warns is a
+        // build whose warnings stop being read.
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined;
+          if (/[\/]node_modules[\/](react|react-dom|react-router|react-router-dom)[\/]/.test(id)) {
+            return 'react';
+          }
+          if (/[\/]node_modules[\/]motion/.test(id)) return 'motion';
+          if (/[\/]node_modules[\/]d3-/.test(id)) return 'charts';
+          return undefined;
         },
       },
     },

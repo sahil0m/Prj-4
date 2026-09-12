@@ -26,6 +26,19 @@ const userSchema = new Schema(
     },
 
     /**
+     * Mirrors "passwordHash is set". It exists because passwordHash is
+     * select:false, so any query that does not explicitly ask for the hash
+     * reads it as absent — and a serialiser deriving the flag from the hash
+     * would then report "no password" for an account that has one. This
+     * field is always selected, and the pre-save hook below keeps it true to
+     * the hash, so callers never have to know how the document was loaded.
+     */
+    hasPassword: {
+      type: Boolean,
+      default: false,
+    },
+
+    /**
      * Linked social accounts. Storing the provider's stable subject id
      * rather than the email, because a user can change their email at the
      * provider and we must still recognise them.
@@ -95,6 +108,18 @@ userSchema.index({ 'identities.provider': 1, 'identities.subject': 1 });
  * findOne().save() round trip has no idea whether a password exists — and
  * treating "not loaded" as "not set" would reject every normal update.
  */
+/**
+ * Derives hasPassword from the hash. Only runs when the hash was actually
+ * loaded: on a save from a query that omitted it, the stored flag is already
+ * correct and must be left alone rather than cleared to false.
+ */
+userSchema.pre('save', function (next) {
+  if (this.isNew || this.get('passwordHash') !== undefined) {
+    this.hasPassword = typeof this.passwordHash === 'string' && this.passwordHash.length > 0;
+  }
+  next();
+});
+
 userSchema.pre('validate', function (next) {
   const hashWasLoaded = this.isNew || this.get('passwordHash') !== undefined;
   if (!hashWasLoaded) {

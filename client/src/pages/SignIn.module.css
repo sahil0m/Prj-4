@@ -1,0 +1,517 @@
+.page {
+  position: relative;
+  min-height: 100dvh;
+  overflow: hidden;
+}
+
+/* Two soft washes behind the content. They are what stop a dark page
+   reading as a flat black rectangle. */
+.auraOne,
+.auraTwo {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(90px);
+  pointer-events: none;
+}
+
+.auraOne {
+  top: -18%;
+  left: -10%;
+  width: 46vw;
+  height: 46vw;
+  background: radial-gradient(circle, rgba(124, 92, 246, 0.3) 0%, transparent 68%);
+}
+
+.auraTwo {
+  bottom: -22%;
+  right: -12%;
+  width: 42vw;
+  height: 42vw;
+  background: radial-gradient(circle, rgba(34, 211, 238, 0.2) 0%, transparent 68%);
+}
+
+.split {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-height: 100dvh;
+  max-width: 1240px;
+  margin: 0 auto;
+  gap: var(--space-4xl);
+  align-items: center;
+  padding: var(--space-3xl) var(--space-2xl);
+}
+
+/* ---------------- left: the pitch ---------------- */
+
+.pitch {
+  padding-right: var(--space-2xl);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-md);
+  margin-bottom: var(--space-3xl);
+}
+
+.brandMark {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-md);
+  background: var(--gradient-iris);
+  color: #fff;
+  box-shadow: var(--accent-glow);
+}
+
+.brandName {
+  font-size: 19px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.pitchTitle {
+  font-size: clamp(38px, 4.2vw, 60px);
+  font-weight: 700;
+  line-height: 1.03;
+  letter-spacing: -0.04em;
+  margin-bottom: var(--space-xl);
+}
+
+.pitchTitle em {
+  font-style: normal;
+  background: var(--gradient-aurora);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.pitchBody {
+  font-size: 17px;
+  line-height: 1.6;
+  color: var(--color-ink-muted);
+  max-width: 44ch;
+  margin-bottom: var(--space-2xl);
+}
+
+.points {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: var(--space-md);
+}
+
+.points li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  font-size: 15px;
+  color: var(--color-ink-muted);
+}
+
+.tick {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-positive) 18%, transparent);
+  color: var(--color-positive);
+}
+
+/* ---------------- right: the form ---------------- */
+
+.formSide {
+  display: grid;
+  place-items: center;
+}
+
+.card {
+  width: 100%;
+  max-width: 430px;
+  padding: var(--space-2xl);
+}
+
+/* ---------------- tabs ---------------- */
+
+.tabs {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  padding: 3px;
+  margin-bottom: var(--space-xl);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-ink) 7%, transparent);
+}
+
+.tab {
+  position: relative;
+  padding: 9px 12px;
+  border-radius: calc(var(--radius-md) - 3px);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-ink-muted);
+  transition: color var(--duration-fast) var(--ease-standard);
+}
+
+.tab[aria-selected='true'] {
+  color: var(--color-ink);
+}
+
+/* The sliding pill sits behind the label and animates between tabs. */
+.tabPill {
+  position: absolute;
+  inset: 0;
+  border-radius: calc(var(--radius-md) - 3px);
+  background: var(--color-surface-raised);
+  box-shadow: var(--elevation-sm);
+}
+
+.tabLabel {
+  position: relative;
+}
+
+/* ---------------- heading ---------------- */
+
+.heading {
+  margin-bottom: var(--space-xl);
+}
+
+.heading h2 {
+  font-size: 24px;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+  margin-bottom: 5px;
+}
+
+.heading p {
+  font-size: 14px;
+  color: var(--color-ink-muted);
+}
+
+/* ---------------- alert ---------------- */
+
+.alert {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  padding: 11px 13px;
+  margin-bottom: var(--space-lg);
+  border-radius: var(--radius-md);
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--color-danger);
+  background: color-mix(in srgb, var(--color-danger) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-danger) 26%, transparent);
+}
+
+.alert svg {
+  flex: none;
+  margin-top: 1px;
+}
+
+/* ---------------- google ---------------- */
+
+.googleButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md);
+  width: 100%;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--color-ink);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-strong);
+  transition:
+    transform var(--duration-fast) var(--ease-spring),
+    border-color var(--duration-fast) var(--ease-standard);
+}
+
+.googleButton:hover {
+  transform: translateY(-1px);
+  border-color: var(--color-ink-subtle);
+}
+
+.divider {
+  position: relative;
+  text-align: center;
+  margin: var(--space-lg) 0;
+}
+
+.divider::before {
+  content: '';
+  position: absolute;
+  inset: 50% 0 auto;
+  height: 1px;
+  background: var(--hairline);
+}
+
+.divider span {
+  position: relative;
+  padding: 0 var(--space-md);
+  font-size: 12px;
+  color: var(--color-ink-subtle);
+  background: var(--color-surface);
+}
+
+/* ---------------- fields ---------------- */
+
+.field {
+  margin-bottom: var(--space-lg);
+}
+
+.field label,
+.labelRow label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-ink-muted);
+}
+
+.labelRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.forgot {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+.forgot:hover {
+  text-decoration: underline;
+}
+
+.inputWrap {
+  position: relative;
+}
+
+.input {
+  width: 100%;
+  padding: 11px 13px;
+  border-radius: var(--radius-md);
+  font-size: 15px;
+  color: var(--color-ink);
+  background: color-mix(in srgb, var(--color-ink) 5%, transparent);
+  border: 1px solid var(--color-border);
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    background var(--duration-fast) var(--ease-standard);
+}
+
+.input::placeholder {
+  color: var(--color-ink-subtle);
+}
+
+.input:hover {
+  border-color: var(--color-border-strong);
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-ink) 3%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 22%, transparent);
+}
+
+.input[aria-invalid='true'] {
+  border-color: var(--color-danger);
+}
+
+.reveal {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  color: var(--color-ink-subtle);
+  transition: color var(--duration-fast) var(--ease-standard);
+}
+
+.reveal:hover {
+  color: var(--color-ink);
+}
+
+.fieldError {
+  margin-top: 6px;
+  font-size: 12.5px;
+  color: var(--color-danger);
+}
+
+/* ---------------- password strength ---------------- */
+
+.strength {
+  margin-top: 10px;
+}
+
+.strengthBars {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.strengthBar {
+  height: 3px;
+  border-radius: 2px;
+  transform-origin: left;
+  background: color-mix(in srgb, var(--color-ink) 14%, transparent);
+}
+
+.strengthBar[data-filled='true'][data-level='1'] {
+  background: var(--color-danger);
+}
+.strengthBar[data-filled='true'][data-level='2'] {
+  background: var(--color-caution);
+}
+.strengthBar[data-filled='true'][data-level='3'] {
+  background: var(--color-data-4);
+}
+.strengthBar[data-filled='true'][data-level='4'] {
+  background: var(--color-positive);
+}
+
+.strengthText {
+  font-size: 12.5px;
+  color: var(--color-ink-subtle);
+}
+
+.strengthText strong {
+  font-weight: 600;
+}
+
+.strengthText[data-level='1'] strong {
+  color: var(--color-danger);
+}
+.strengthText[data-level='2'] strong {
+  color: var(--color-caution);
+}
+.strengthText[data-level='3'] strong,
+.strengthText[data-level='4'] strong {
+  color: var(--color-positive);
+}
+
+/* ---------------- submit ---------------- */
+
+.submit {
+  position: relative;
+  width: 100%;
+  height: 46px;
+  margin-top: var(--space-sm);
+  border-radius: var(--radius-md);
+  font-size: 15px;
+  font-weight: 650;
+  color: #fff;
+  background: var(--accent-gradient);
+  box-shadow: var(--accent-glow);
+  overflow: hidden;
+  transition:
+    transform var(--duration-fast) var(--ease-spring),
+    opacity var(--duration-fast) var(--ease-standard);
+}
+
+.submit:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.submit:active:not(:disabled) {
+  transform: translateY(0) scale(0.995);
+}
+
+.submit:disabled {
+  opacity: 0.75;
+  cursor: not-allowed;
+}
+
+.submitInner {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+}
+
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---------------- small print ---------------- */
+
+.smallPrint {
+  margin-top: var(--space-lg);
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--color-ink-subtle);
+  text-align: center;
+}
+
+.smallPrint a,
+.inlineLink {
+  color: var(--color-accent);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.smallPrint a:hover,
+.inlineLink:hover {
+  text-decoration: underline;
+}
+
+.inlineLink {
+  font-size: inherit;
+}
+
+/* ---------------- responsive ---------------- */
+
+@media (max-width: 900px) {
+  .split {
+    grid-template-columns: 1fr;
+    gap: var(--space-2xl);
+    padding: var(--space-2xl) var(--space-lg);
+    align-items: start;
+  }
+
+  .pitch {
+    padding-right: 0;
+    text-align: center;
+  }
+
+  .brand {
+    margin-bottom: var(--space-xl);
+  }
+
+  .pitchBody {
+    margin-inline: auto;
+  }
+
+  /* The bullet list is supporting detail; on a phone the form matters more. */
+  .points {
+    display: none;
+  }
+
+  .card {
+    max-width: 100%;
+  }
+}
