@@ -6,12 +6,14 @@ import rateLimit from 'express-rate-limit';
 import { ZodError } from 'zod';
 import { allowedOrigins, isProduction } from './config.js';
 import { logger } from './lib/logger.js';
+import { MulterError } from 'multer';
 import { AiError } from './services/ai/providers.js';
 import { pingDb } from './lib/db.js';
 import { authRoutes } from './routes/auth.js';
 import { deckRoutes } from './routes/decks.js';
 import { sessionRoutes } from './routes/sessions.js';
 import { aiRoutes } from './routes/ai.js';
+import { adminRoutes } from './routes/admin.js';
 
 /**
  * Builds the Express application.
@@ -69,6 +71,16 @@ export function createApp(): Express {
 
   // A 1MB ceiling. Nothing the API accepts is legitimately larger, and an
   // unbounded parser is a trivial denial-of-service vector.
+  /*
+   * Node's own query parser rather than express's extended `qs` mode.
+   *
+   * Every query string this API takes is flat — ?code=123456, ?format=csv —
+   * so the nested-object support `qs` adds is unused, while its advisories
+   * (an array-limit bypass and a denial of service) are not. Choosing the
+   * simple parser removes that surface entirely rather than tracking it.
+   */
+  app.set('query parser', 'simple');
+
   app.use(express.json({ limit: '1mb' }));
   app.use(cookieParser());
 
@@ -114,6 +126,7 @@ export function createApp(): Express {
   app.use('/api/decks', deckRoutes());
   app.use('/api/sessions', sessionRoutes());
   app.use('/api/ai', aiRoutes());
+  app.use('/api/admin', adminRoutes());
 
   /* ---------------- 404 ---------------- */
 
@@ -142,6 +155,22 @@ export function createApp(): Express {
     // An AI failure is an upstream problem, not a bug here, and its message
     // is already written for a person to read — "every provider is busy" is
     // far more useful than "something went wrong on our side".
+    // Multer rejects an oversized or malformed upload with its own error
+    // type. Without this it reaches the catch-all below and the user is
+    // told "something went wrong on our side" for a file they can simply
+    // make smaller.
+    if (err instanceof MulterError) {
+      const message =
+        err.code === 'LIMIT_FILE_SIZE'
+          ? 'That file is too large. The limit is 10MB.'
+          : err.code === 'LIMIT_FILE_COUNT' || err.code === 'LIMIT_UNEXPECTED_FILE'
+            ? 'Upload one file at a time.'
+            : 'That upload was not valid.';
+
+      res.status(413).json({ error: message, code: 'file_too_large' });
+      return;
+    }
+
     if (err instanceof AiError) {
       res.status(503).json({ error: err.message, code: err.code });
       return;

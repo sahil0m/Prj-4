@@ -74,6 +74,33 @@ const userSchema = new Schema(
      */
     tokenVersion: { type: Number, default: 0 },
 
+    /**
+     * Access level.
+     *
+     * Deliberately a small enum rather than a permission set: this system
+     * has exactly two kinds of person, and a flexible permission model
+     * nobody needs is a source of bugs rather than of flexibility.
+     */
+    role: {
+      type: String,
+      enum: ['user', 'admin'],
+      default: 'user',
+      index: true,
+    },
+
+    /**
+     * Set when an admin disables the account.
+     *
+     * Suspension bumps tokenVersion, so it takes effect on the next request
+     * rather than whenever the current access token happens to expire.
+     */
+    suspendedAt: { type: Date, default: null },
+    suspendedReason: { type: String, default: '', maxlength: 300 },
+
+    /** Rolling count, used to keep one user from exhausting the free tier. */
+    aiRequestsToday: { type: Number, default: 0 },
+    aiRequestsResetAt: { type: Date, default: null },
+
     lastSeenAt: { type: Date, default: null },
 
     /** Soft delete. Set on account deletion; a job purges the row later. */

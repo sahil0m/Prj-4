@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { motion } from 'motion/react';
-import { Sparkles, X, Loader2, Wand2 } from 'lucide-react';
+import { Sparkles, X, Loader2, Wand2, FileText, Upload, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, ApiError } from '../lib/api';
 import styles from './AiPanel.module.css';
@@ -41,8 +41,47 @@ export function AiPanel({
   const [style, setStyle] = useState<Style>('mixed');
   const [busy, setBusy] = useState(false);
 
+  // The extracted text, not the file. The server parses and discards; this
+  // holds what it read back, so the author can see what the AI will work
+  // from before spending a request on it.
+  const [source, setSource] = useState<{
+    filename: string;
+    text: string;
+    characters: number;
+    truncated: boolean;
+  } | null>(null);
+  const [reading, setReading] = useState(false);
+  const [dragging, setDragging] = useState(false);
+
+  const readFile = async (file: File) => {
+    setReading(true);
+    try {
+      const result = await api.readDocument(file);
+      setSource({
+        filename: result.filename,
+        text: result.text,
+        characters: result.characters,
+        truncated: result.truncated,
+      });
+
+      if (result.truncated) {
+        toast.warning('That document is long', {
+          description: 'The first part was used. Split it if the rest matters.',
+        });
+      }
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'That file could not be read.');
+    } finally {
+      setReading(false);
+    }
+  };
+
+  // A document is subject enough on its own; a topic is only required when
+  // there is nothing else to work from.
+  const ready = source !== null || topic.trim().length >= 3;
+
   const generate = async () => {
-    if (topic.trim().length < 3 || busy) return;
+    if (!ready || busy) return;
 
     setBusy(true);
     try {
@@ -52,6 +91,8 @@ export function AiPanel({
         audience: audience.trim() || undefined,
         style,
         deckId,
+        sourceText: source?.text,
+        sourceName: source?.filename,
       });
 
       toast.success(`${String(result.deck.slides.length)} slides ready`, {
@@ -60,6 +101,7 @@ export function AiPanel({
 
       onOpenChange(false);
       setTopic('');
+      setSource(null);
       onDone(result.deck.id);
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : 'The AI could not be reached.');
@@ -91,15 +133,99 @@ export function AiPanel({
           </header>
 
           <div className={styles.body}>
+            {/* The document comes first: when there is one it is the subject,
+                and the fields below become refinements of it. */}
+            <div className={styles.field}>
+              <span className={styles.label}>
+                Build from a document <span className={styles.optional}>optional</span>
+              </span>
+
+              {source ? (
+                <div className={styles.sourceCard}>
+                  <span className={styles.sourceIcon} aria-hidden="true">
+                    <Check size={16} />
+                  </span>
+                  <span className={styles.sourceText}>
+                    <span className={styles.sourceName}>{source.filename}</span>
+                    <span className={styles.sourceMeta}>
+                      {source.characters.toLocaleString()} characters read
+                      {source.truncated ? ' (shortened)' : ''}
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    className={styles.sourceRemove}
+                    onClick={() => {
+                      setSource(null);
+                    }}
+                    aria-label="Remove document"
+                  >
+                    <X size={15} />
+                  </button>
+                </div>
+              ) : (
+                <label
+                  className={styles.dropZone}
+                  data-dragging={dragging}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setDragging(true);
+                  }}
+                  onDragLeave={() => {
+                    setDragging(false);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setDragging(false);
+                    const file = e.dataTransfer.files[0];
+                    if (file) void readFile(file);
+                  }}
+                >
+                  <input
+                    type="file"
+                    className={styles.fileInput}
+                    accept=".pdf,.docx,.txt,.md"
+                    disabled={reading}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) void readFile(file);
+                      // Cleared, so choosing the same file twice still fires.
+                      e.target.value = '';
+                    }}
+                  />
+
+                  {reading ? (
+                    <>
+                      <Loader2 size={20} className={styles.spin} />
+                      <span className={styles.dropTitle}>Reading the document...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload size={20} className={styles.dropIcon} />
+                      <span className={styles.dropTitle}>Drop a file, or click to choose</span>
+                      <span className={styles.dropHint}>PDF, Word, Markdown or text</span>
+                    </>
+                  )}
+                </label>
+              )}
+            </div>
+
             <label className={styles.field}>
-              <span className={styles.label}>What is it about?</span>
+              <span className={styles.label}>
+                {source ? 'Anything to add?' : 'What is it about?'}
+                {source ? <span className={styles.optional}> optional</span> : null}
+              </span>
               <textarea
                 className={styles.textarea}
                 value={topic}
                 rows={2}
                 maxLength={300}
                 autoFocus
-                placeholder="A team retrospective on our last sprint"
+                placeholder={
+                  source
+                    ? 'Focus on the second half, and keep it light'
+                    : 'A team retrospective on our last sprint'
+                }
                 onChange={(e) => {
                   setTopic(e.target.value);
                 }}
@@ -167,7 +293,7 @@ export function AiPanel({
             <button
               type="button"
               className={styles.generate}
-              disabled={topic.trim().length < 3 || busy}
+              disabled={!ready || busy}
               onClick={() => {
                 void generate();
               }}
@@ -179,7 +305,7 @@ export function AiPanel({
                 </>
               ) : (
                 <>
-                  <Wand2 size={17} />
+                  {source ? <FileText size={17} /> : <Wand2 size={17} />}
                   {deckId ? 'Add slides' : 'Create deck'}
                 </>
               )}

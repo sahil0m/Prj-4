@@ -14,7 +14,10 @@ import {
   aggregate,
   definitionFor,
   isAnswerable,
+  scoreAnswer,
+  buildLeaderboard,
   zAnswer,
+  type LeaderboardEntry,
   type SlideKind,
   type SessionState,
   type ParticipantSlide,
@@ -184,6 +187,26 @@ export function snapshotOf(session: SessionDoc): Snapshot {
   return session.deckSnapshot as Snapshot;
 }
 
+/**
+ * Whether this session should ask people for a name.
+ *
+ * Derived from the deck rather than read from a setting alone. A quiz
+ * produces a leaderboard, and a leaderboard of "Anonymous, Anonymous,
+ * Anonymous" is worthless — so any deck containing a quiz or a leaderboard
+ * slide asks, whatever the setting says. A presenter can still turn names
+ * on for a non-quiz deck; they cannot accidentally turn them off for one
+ * that needs them.
+ */
+export function collectsNames(session: SessionDoc): boolean {
+  const snapshot = snapshotOf(session);
+
+  if (snapshot.settings?.collectNames === true) return true;
+
+  return snapshot.slides.some(
+    (slide) => slide.kind === 'leaderboard' || definitionFor(slide.kind).isQuiz,
+  );
+}
+
 export function slideOf(session: SessionDoc, slideId: string | null): SnapshotSlide | null {
   if (!slideId) return null;
   return snapshotOf(session).slides.find((s) => s.id === slideId) ?? null;
@@ -301,6 +324,20 @@ export async function recordAnswer(
     }
   }
 
+  // Quiz answers are scored as they arrive, against the countdown that was
+  // running at that moment. Scoring later, against a clock that has since
+  // moved on, would silently change results the room has already seen.
+  const scored = definitionFor(slide.kind).isQuiz
+    ? scoreAnswer(
+        {
+          kind: slide.kind,
+          payload: parsed.data,
+          elapsedMs: elapsedFor(session, slideId, parsed.data),
+        },
+        slide.config,
+      )
+    : null;
+
   try {
     const response = await Response.create({
       sessionId: session._id,
@@ -309,9 +346,22 @@ export async function recordAnswer(
       kind: slide.kind,
       payload: parsed.data,
       clientMsgId,
+      ...(scored
+        ? {
+            isCorrect: scored.correct,
+            points: scored.points,
+            elapsedMs: elapsedFor(session, slideId, parsed.data),
+          }
+        : {}),
     });
 
     await Session.updateOne({ _id: session._id }, { $inc: { 'stats.responseCount': 1 } });
+
+    // The running total is kept on the participant so the leaderboard does
+    // not have to re-add every answer on every render.
+    if (scored && scored.points > 0) {
+      await Participant.updateOne({ _id: participant._id }, { $inc: { score: scored.points } });
+    }
 
     return { responseId: response._id.toString(), duplicate: false };
   } catch (err) {
@@ -323,6 +373,65 @@ export async function recordAnswer(
     }
     throw err;
   }
+}
+
+/**
+ * How long after the countdown started this answer arrived.
+ *
+ * The phone reports its own elapsed time, which is right when the clock is
+ * in sync and wrong when it is not. The server's own measurement is used
+ * whenever a countdown is running, because a device clock is something a
+ * participant can change.
+ */
+function elapsedFor(session: SessionDoc, slideId: string, payload: unknown): number {
+  if (session.countdownSlideId === slideId && session.countdownStartedAt) {
+    return Math.max(0, Date.now() - session.countdownStartedAt.getTime());
+  }
+
+  const claimed = (payload as { elapsedMs?: unknown }).elapsedMs;
+  return typeof claimed === 'number' && Number.isFinite(claimed) && claimed >= 0
+    ? Math.min(claimed, 600_000)
+    : 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* Leaderboard                                                         */
+/* ------------------------------------------------------------------ */
+
+/** Standings for a session, newest scores first. */
+export async function leaderboardFor(
+  session: SessionDoc,
+  previous?: Map<string, number>,
+): Promise<LeaderboardEntry[]> {
+  const rows = await Response.find({
+    sessionId: session._id,
+    deletedAt: null,
+    points: { $ne: null },
+  })
+    .select('participantId points isCorrect')
+    .lean();
+
+  if (rows.length === 0) return [];
+
+  // One lookup for every name, rather than a populate per row.
+  const participants = await Participant.find({ sessionId: session._id })
+    .select('displayName')
+    .lean();
+
+  const names = new Map(participants.map((p) => [p._id.toString(), p.displayName]));
+
+  return buildLeaderboard(
+    rows.map((row) => {
+      const id = (row.participantId as Types.ObjectId).toString();
+      return {
+        participantId: id,
+        displayName: names.get(id) ?? '',
+        points: row.points ?? 0,
+        correct: row.isCorrect === true,
+      };
+    }),
+    previous,
+  );
 }
 
 function isDuplicateKey(err: unknown): boolean {

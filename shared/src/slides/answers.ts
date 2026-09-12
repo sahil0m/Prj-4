@@ -97,27 +97,34 @@ export const zNpsAnswer = z.object({
 export const zQuizSelectAnswer = z.object({
   kind: z.literal('quiz_select'),
   optionIds: z.array(zLocalId).min(1).max(8),
-  /** Milliseconds from countdown start to submission. Used for scoring. */
-  elapsedMs: z.number().int().min(0).max(600_000),
+  /**
+   * Milliseconds from countdown start to submission.
+   *
+   * Optional, and only a hint. The server measures this itself against the
+   * countdown it started, because a device clock is something a participant
+   * can change — and requiring it would reject answers from any client that
+   * does not track timing.
+   */
+  elapsedMs: z.number().int().min(0).max(600_000).optional().default(0),
 });
 
 export const zQuizTypeAnswer = z.object({
   kind: z.literal('quiz_type'),
   text: z.string().trim().min(1).max(200),
-  elapsedMs: z.number().int().min(0).max(600_000),
+  elapsedMs: z.number().int().min(0).max(600_000).optional().default(0),
 });
 
 export const zQuizMatchAnswer = z.object({
   kind: z.literal('quiz_match'),
   /** pairId -> the right-hand label the participant matched to it */
   matches: z.record(zLocalId, z.string().trim().max(120)),
-  elapsedMs: z.number().int().min(0).max(600_000),
+  elapsedMs: z.number().int().min(0).max(600_000).optional().default(0),
 });
 
 export const zQuizOrderAnswer = z.object({
   kind: z.literal('quiz_order'),
   order: z.array(zLocalId).min(2).max(10),
-  elapsedMs: z.number().int().min(0).max(600_000),
+  elapsedMs: z.number().int().min(0).max(600_000).optional().default(0),
 });
 
 /* --- audience driven ------------------------------------------------ */

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { SlideKind } from '../slides/kinds.js';
+import type { LeaderboardEntry } from '../slides/scoring.js';
 
 /**
  * The realtime contract.
@@ -146,6 +147,23 @@ export interface ServerEvents {
   'response:removed': (payload: { slideId: string; responseId: string }) => void;
 
   'participants:count': (payload: { count: number }) => void;
+
+  /** Standings, sent after each quiz answer and on a leaderboard slide. */
+  'leaderboard:update': (payload: { entries: LeaderboardEntry[] }) => void;
+
+  /**
+   * This device's own quiz result for the slide just answered.
+   *
+   * Sent only to the participant it concerns: a phone showing everyone
+   * else's score would turn the quiz into a copying exercise.
+   */
+  'quiz:result': (payload: {
+    slideId: string;
+    correct: boolean;
+    points: number;
+    totalScore: number;
+    rank: number | null;
+  }) => void;
 
   reaction: (payload: { emoji: string }) => void;
 

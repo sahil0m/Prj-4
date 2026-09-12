@@ -299,8 +299,54 @@ export const api = {
     audience?: string;
     style?: string;
     deckId?: string;
+    sourceText?: string;
+    sourceName?: string;
   }): Promise<DeckResponse & { provider: string }> =>
     request('/ai/generate-deck', { method: 'POST', body: input }),
+
+  /**
+   * Extracts text from an uploaded document.
+   *
+   * Sent as multipart rather than JSON, so the browser streams the file
+   * instead of holding a base64 copy of it in memory.
+   */
+  async readDocument(file: File): Promise<{
+    text: string;
+    characters: number;
+    truncated: boolean;
+    format: string;
+    filename: string;
+  }> {
+    const body = new FormData();
+    body.append('file', file);
+
+    const response = await fetch('/api/ai/read-document', {
+      method: 'POST',
+      credentials: 'include',
+      headers: getAccessToken() ? { Authorization: `Bearer ${getAccessToken() ?? ''}` } : {},
+      body,
+    });
+
+    const text = await response.text();
+    const parsed: unknown = text ? JSON.parse(text) : null;
+
+    if (!response.ok) {
+      const shape = (parsed ?? {}) as Partial<ApiErrorShape>;
+      throw new ApiError(
+        response.status,
+        shape.code ?? 'unknown',
+        shape.error ?? 'That file could not be read.',
+      );
+    }
+
+    return parsed as {
+      text: string;
+      characters: number;
+      truncated: boolean;
+      format: string;
+      filename: string;
+    };
+  },
 
   improveSlide: (
     deckId: string,

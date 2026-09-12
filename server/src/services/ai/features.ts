@@ -59,6 +59,9 @@ export interface GenerateDeckInput {
   audience?: string;
   /** Nudges the mix towards questions, a quiz, or a mixed session. */
   style?: 'mixed' | 'quiz' | 'discussion' | 'feedback';
+  /** Text from an uploaded document, when the deck is built from source. */
+  sourceText?: string;
+  sourceName?: string;
 }
 
 export interface GeneratedDeck {
@@ -124,17 +127,47 @@ export async function generateDeck(input: GenerateDeckInput): Promise<GeneratedD
           ? 'Mostly scales, nps and star_rating, to gather opinions.'
           : 'A mix of kinds so the session keeps changing shape.';
 
-  const prompt = [
-    `Topic: ${input.topic}`,
-    input.audience ? `Audience: ${input.audience}` : '',
-    `Number of slides: ${String(count)}`,
-    styleBrief,
-  ]
-    .filter(Boolean)
-    .join('\n');
+  // With a document, the instruction changes from "invent questions about a
+  // topic" to "ask about this material" — a different and far more useful
+  // task, and one the model does much better when told so explicitly.
+  const source = input.sourceText?.trim();
+
+  const prompt = source
+    ? [
+        `Build the deck from this document${input.sourceName ? ` (${input.sourceName})` : ''}.`,
+        input.topic ? `The presenter also said: ${input.topic}` : '',
+        input.audience ? `Audience: ${input.audience}` : '',
+        `Number of slides: ${String(count)}`,
+        styleBrief,
+        '',
+        'Every question must be answerable from the document below. Use its',
+        'own terms and examples. Do not invent facts that are not in it.',
+        '',
+        '--- DOCUMENT ---',
+        source,
+        '--- END DOCUMENT ---',
+      ]
+        .filter(Boolean)
+        .join('\n')
+    : [
+        `Topic: ${input.topic}`,
+        input.audience ? `Audience: ${input.audience}` : '',
+        `Number of slides: ${String(count)}`,
+        styleBrief,
+      ]
+        .filter(Boolean)
+        .join('\n');
 
   const result = await complete(
-    { system: DECK_SYSTEM, prompt, temperature: 0.85, maxTokens: 3000, json: true },
+    {
+      system: DECK_SYSTEM,
+      prompt,
+      // Lower temperature with source material: the task is to draw
+      // questions out of a document accurately, not to be inventive.
+      temperature: source ? 0.5 : 0.85,
+      maxTokens: 4000,
+      json: true,
+    },
     'gemini',
   );
 
@@ -402,4 +435,80 @@ export function parseJson(text: string): unknown {
   }
 
   throw new AiError('bad_json', 'The AI did not return valid JSON.', true);
+}
+
+/* ------------------------------------------------------------------ */
+/* Quota                                                               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Per-user daily AI allowance.
+ *
+ * The free tiers are shared across everyone on this server, so one user
+ * generating fifty decks would leave the rest without AI for the day — and
+ * they would discover it mid-presentation. A per-user cap keeps the quota
+ * spread fairly, and admins can see who is near it.
+ */
+export const DAILY_AI_LIMIT = 100;
+
+export interface QuotaState {
+  used: number;
+  limit: number;
+  remaining: number;
+}
+
+/**
+ * Counts one request against the user's day, and refuses past the cap.
+ *
+ * Uses a single atomic update rather than read-then-write, so two requests
+ * arriving together cannot both read the same count and both pass.
+ */
+export async function consumeQuota(userId: string): Promise<QuotaState> {
+  const { User } = await import('../../models/index.js');
+
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+
+  // Reset first, in its own conditional update: a user whose window has
+  // rolled over starts the day at zero without a separate read.
+  await User.updateOne(
+    { _id: userId, $or: [{ aiRequestsResetAt: null }, { aiRequestsResetAt: { $lt: startOfDay } }] },
+    { $set: { aiRequestsToday: 0, aiRequestsResetAt: new Date() } },
+  );
+
+  const updated = await User.findOneAndUpdate(
+    { _id: userId, aiRequestsToday: { $lt: DAILY_AI_LIMIT } },
+    { $inc: { aiRequestsToday: 1 } },
+    { new: true, projection: { aiRequestsToday: 1 } },
+  ).lean();
+
+  if (!updated) {
+    throw new HttpError(
+      429,
+      `You have used all ${String(DAILY_AI_LIMIT)} AI requests for today. They reset at midnight.`,
+      'ai_quota_exhausted',
+    );
+  }
+
+  const used = updated.aiRequestsToday;
+  return { used, limit: DAILY_AI_LIMIT, remaining: Math.max(0, DAILY_AI_LIMIT - used) };
+}
+
+/** The user's current allowance, without spending any of it. */
+export async function quotaFor(userId: string): Promise<QuotaState> {
+  const { User } = await import('../../models/index.js');
+
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+
+  const user = await User.findById(userId).select('aiRequestsToday aiRequestsResetAt').lean();
+
+  // A stale window means the count belongs to a previous day.
+  // A missing user cannot have spent anything; a stale window means the
+  // count belongs to a previous day.
+  const resetAt = user?.aiRequestsResetAt ?? null;
+  const stale = !user || resetAt === null || resetAt < startOfDay;
+  const used = stale ? 0 : user.aiRequestsToday;
+
+  return { used, limit: DAILY_AI_LIMIT, remaining: Math.max(0, DAILY_AI_LIMIT - used) };
 }

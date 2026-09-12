@@ -4,10 +4,11 @@ import { Types } from 'mongoose';
 import { env, isProduction } from '../config.js';
 import { logger } from '../lib/logger.js';
 import { verifyAccessToken } from '../lib/tokens.js';
-import { Session, User, AudienceQuestion } from '../models/index.js';
+import { Session, User, AudienceQuestion, Response } from '../models/index.js';
 import { HttpError } from '../app.js';
 import * as sessions from '../services/sessions.js';
 import {
+  definitionFor,
   room,
   zParticipantJoin,
   zSubmitAnswer,
@@ -145,15 +146,13 @@ export function attachRealtime(
           const count = await sessions.countParticipants(session._id);
           const slide = await sessions.participantSlideOf(session, participant._id);
 
-          const settings = sessions.snapshotOf(session).settings ?? {};
-
           const result: JoinResult = {
             ok: true,
             participantId: context.participantId,
             session: sessions.toSessionState(session, count),
             slide,
             displayName: participant.displayName,
-            collectNames: settings.collectNames === true,
+            collectNames: sessions.collectsNames(session),
           };
           ack(result);
 
@@ -220,6 +219,27 @@ export function attachRealtime(
             payload: input.payload,
             displayName: participant.displayName,
           });
+
+          // Quiz slides carry a score, so the standings move on every answer.
+          const slide = sessions.slideOf(session, input.slideId);
+
+          if (slide && definitionFor(slide.kind).isQuiz) {
+            const entries = await sessions.leaderboardFor(session);
+            io.to(room.presenters(sessionId)).emit('leaderboard:update', { entries });
+
+            const mine = entries.find((entry) => entry.participantId === participantId);
+            const stored = await Response.findById(responseId).select('isCorrect points').lean();
+
+            // Only to this socket: a phone that could see the whole board
+            // would turn the quiz into a copying exercise.
+            socket.emit('quiz:result', {
+              slideId: input.slideId,
+              correct: stored?.isCorrect === true,
+              points: stored?.points ?? 0,
+              totalScore: mine?.score ?? 0,
+              rank: mine?.rank ?? null,
+            });
+          }
         } catch (err) {
           ack(toAck(err));
         }
@@ -309,6 +329,9 @@ export function attachRealtime(
             const results = await sessions.resultsFor(session, session.currentSlideId);
             if (results) socket.emit('results:update', results);
           }
+
+          const entries = await sessions.leaderboardFor(session);
+          if (entries.length > 0) socket.emit('leaderboard:update', { entries });
 
           ack({ ok: true });
         } catch (err) {
@@ -544,6 +567,15 @@ async function broadcastSlide(
   if (session.currentSlideId) {
     const results = await sessions.resultsFor(session, session.currentSlideId);
     if (results) io.to(room.presenters(sessionId)).emit('results:update', results);
+  }
+
+  // A leaderboard slide needs the standings the moment it appears, not
+  // after the next answer happens to arrive.
+  const slide = sessions.slideOf(session, session.currentSlideId ?? null);
+
+  if (slide?.kind === 'leaderboard') {
+    const entries = await sessions.leaderboardFor(session);
+    io.to(room.presenters(sessionId)).emit('leaderboard:update', { entries });
   }
 }
 

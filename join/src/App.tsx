@@ -16,7 +16,15 @@ type Phase = 'code' | 'name' | 'live' | 'ended';
 export function App() {
   const [phase, setPhase] = useState<Phase>('code');
   const [code, setCode] = useState(() => codeFromUrl());
-  const [name, setName] = useState('');
+  const [name, setName] = useState(() => {
+    // Kept per device so a refresh mid-session does not turn someone into a
+    // second, nameless player on the scoreboard.
+    try {
+      return localStorage.getItem('pulse.name') ?? '';
+    } catch {
+      return '';
+    }
+  });
   const [collectNames, setCollectNames] = useState(false);
 
   const [sessionTitle, setSessionTitle] = useState('');
@@ -31,10 +39,16 @@ export function App() {
 
   const connection = useRef<SessionConnection | null>(null);
 
+  // When this device first saw the current slide. The server measures
+  // elapsed time authoritatively against its own countdown, but sending
+  // ours covers the case where no countdown is running.
+  const slideShownAt = useRef<number>(Date.now());
+
   /** A fresh slide clears the "sent" state so the new question is answerable. */
   const showSlide = useCallback((next: ParticipantSlide | null) => {
     setSlide(next);
     setSent(next?.answered === true);
+    slideShownAt.current = Date.now();
   }, []);
 
   useEffect(() => {
@@ -74,12 +88,29 @@ export function App() {
     }
 
     connection.current = conn;
+
+    if (displayName !== undefined && displayName !== '') {
+      try {
+        localStorage.setItem('pulse.name', displayName);
+      } catch {
+        // Private browsing refuses storage; the name still holds for this tab.
+      }
+    }
+
     setState(result.session);
     showSlide(result.slide);
     setCollectNames(result.collectNames);
 
     // Ask for a name only when the deck wants one and we do not have it yet.
     if (result.collectNames && result.displayName === '' && displayName === undefined) {
+      // A name already on this device is used without asking again.
+      const remembered = name.trim();
+
+      if (remembered !== '') {
+        void connect(joinCode, remembered);
+        return;
+      }
+
       setPhase('name');
       return;
     }
@@ -93,7 +124,12 @@ export function App() {
     // Marked as sent immediately. The answer is queued and retried if the
     // network is down, so telling the person it failed would be a lie.
     setSent(true);
-    void connection.current.answer(slide.id, payload).then((result) => {
+
+    // Quiz kinds score on speed. A non-quiz slide ignores the field, so it
+    // is simpler to always send it than to branch on the kind here.
+    const timed = { ...(payload as object), elapsedMs: Date.now() - slideShownAt.current };
+
+    void connection.current.answer(slide.id, timed).then((result) => {
       setPending(connection.current?.pendingCount ?? 0);
       if (!result.ok) {
         setSent(false);
@@ -126,7 +162,7 @@ export function App() {
         setName={setName}
         busy={busy}
         onSubmit={() => {
-          void connect(code, name.trim() === '' ? 'Guest' : name.trim());
+          void connect(code, name.trim());
         }}
       />
     );
@@ -306,6 +342,14 @@ function CodeScreen({
   );
 }
 
+/**
+ * Asks for a name.
+ *
+ * A name is required rather than optional. This screen only appears when
+ * the deck actually needs one — a quiz or a leaderboard — and a scoreboard
+ * of anonymous rows tells the room nothing. Decks that do not need a name
+ * never reach this screen at all.
+ */
 function NameScreen({
   name,
   setName,
@@ -317,10 +361,15 @@ function NameScreen({
   busy: boolean;
   onSubmit: () => void;
 }) {
+  const trimmed = name.trim();
+  const valid = trimmed.length >= 1 && trimmed.length <= 60;
+
   return (
     <Centered>
       <h1 className={styles.joinTitle}>What should we call you?</h1>
-      <p className={styles.joinBody}>This appears next to your answers.</p>
+      <p className={styles.joinBody}>
+        This appears on the scoreboard, so pick something the room will recognise.
+      </p>
 
       <input
         className={styles.nameInput}
@@ -328,21 +377,23 @@ function NameScreen({
         maxLength={60}
         autoFocus
         placeholder="Your name"
+        autoComplete="name"
         enterKeyHint="go"
         onChange={(e) => {
           setName(e.currentTarget.value);
         }}
         onKeyDown={(e) => {
-          if (e.key === 'Enter') onSubmit();
+          if (e.key === 'Enter' && valid) onSubmit();
         }}
       />
 
-      <button type="button" className={styles.primaryButton} disabled={busy} onClick={onSubmit}>
+      <button
+        type="button"
+        className={styles.primaryButton}
+        disabled={busy || !valid}
+        onClick={onSubmit}
+      >
         {busy ? 'Joining…' : 'Continue'}
-      </button>
-
-      <button type="button" className={styles.ghostButton} disabled={busy} onClick={onSubmit}>
-        Stay anonymous
       </button>
     </Centered>
   );

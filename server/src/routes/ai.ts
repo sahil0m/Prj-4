@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import multer from 'multer';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { Session, Response } from '../models/index.js';
@@ -6,6 +7,7 @@ import { HttpError } from '../app.js';
 import { requireAuth, type AuthedRequest } from '../middleware/requireAuth.js';
 import * as ai from '../services/ai/features.js';
 import { availableProviders, isAiConfigured } from '../services/ai/providers.js';
+import * as documents from '../services/ai/documents.js';
 import * as sessions from '../services/sessions.js';
 import * as decks from '../services/decks.js';
 
@@ -29,14 +31,43 @@ const aiLimiter = rateLimit({
   },
 });
 
-const zGenerate = z.object({
-  topic: z.string().trim().min(3).max(300),
-  slideCount: z.number().int().min(1).max(15).default(6),
-  audience: z.string().trim().max(120).optional(),
-  style: z.enum(['mixed', 'quiz', 'discussion', 'feedback']).default('mixed'),
-  /** When set, the slides are appended to this deck instead of a new one. */
-  deckId: z.string().max(64).optional(),
+/**
+ * Uploads are held in memory, never on disk.
+ *
+ * The file is parsed, its text handed to the model, and both discarded.
+ * Writing a presenter's internal documents to disk would create a real
+ * privacy obligation in exchange for nothing they benefit from.
+ */
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: documents.MAX_FILE_BYTES,
+    files: 1,
+    // Keeps a crafted multipart body from exhausting memory through fields
+    // rather than through the file itself.
+    fields: 10,
+    fieldSize: 4096,
+  },
 });
+
+const zGenerate = z
+  .object({
+    // Optional when a document is supplied: the document is the subject, and
+    // demanding a topic as well would be busywork.
+    topic: z.string().trim().max(300).default(''),
+    slideCount: z.number().int().min(1).max(15).default(6),
+    audience: z.string().trim().max(120).optional(),
+    style: z.enum(['mixed', 'quiz', 'discussion', 'feedback']).default('mixed'),
+    /** When set, the slides are appended to this deck instead of a new one. */
+    deckId: z.string().max(64).optional(),
+    /** Text from a document the author uploaded and reviewed. */
+    sourceText: z.string().max(80_000).optional(),
+    sourceName: z.string().max(200).optional(),
+  })
+  .refine((input) => input.topic.trim().length >= 3 || (input.sourceText?.trim().length ?? 0) > 0, {
+    message: 'Describe the session, or upload a document.',
+    path: ['topic'],
+  });
 
 const zImprove = z.object({
   deckId: z.string().max(64),
@@ -59,10 +90,75 @@ export function aiRoutes(): Router {
     });
   });
 
+  /**
+   * How much allowance the caller has left.
+   *
+   * Authenticated but outside the quota middleware below: checking your
+   * remaining requests must not itself consume one.
+   */
+  router.get('/quota', requireAuth, (req, res, next) => {
+    void (async () => {
+      try {
+        res.json(await ai.quotaFor((req as AuthedRequest).user.id));
+      } catch (err) {
+        next(err);
+      }
+    })();
+  });
+
   router.use(requireAuth);
   router.use(aiLimiter);
 
   const ownerOf = (req: unknown): string => (req as AuthedRequest).user.id;
+
+  /**
+   * Spends one unit of the caller's daily allowance.
+   *
+   * Applied before the provider is called, in one place, so no endpoint can
+   * be added later that forgets to count against the shared free quota.
+   */
+  router.use((req, _res, next) => {
+    void (async () => {
+      try {
+        await ai.consumeQuota(ownerOf(req));
+        next();
+      } catch (err) {
+        next(err);
+      }
+    })();
+  });
+
+  /**
+   * Reads an uploaded document and returns its text.
+   *
+   * Separate from generation so the author sees what was extracted, and how
+   * much of it, before spending a request on it — and so a scanned PDF with
+   * no readable text is reported immediately rather than producing a deck
+   * about nothing.
+   */
+  router.post('/read-document', upload.single('file'), (req, res, next) => {
+    void (async () => {
+      try {
+        const file = req.file;
+
+        if (!file) {
+          throw new HttpError(422, 'No file was uploaded.', 'no_file');
+        }
+
+        const extracted = await documents.extract(file.buffer, file.originalname, file.mimetype);
+
+        res.json({
+          text: extracted.text,
+          characters: extracted.characters,
+          truncated: extracted.truncated,
+          format: extracted.format,
+          filename: file.originalname,
+        });
+      } catch (err) {
+        next(err);
+      }
+    })();
+  });
 
   /** Builds a deck, or adds slides to an existing one. */
   router.post('/generate-deck', (req, res, next) => {

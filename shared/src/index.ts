@@ -6,6 +6,7 @@ export * from './slides/registry.js';
 export * from './slides/readiness.js';
 export * from './slides/fields.js';
 export * from './slides/results.js';
+export * from './slides/scoring.js';
 export * from './protocol/events.js';
 export * from './theme/tokens.js';
 export * from './theme/contrast.js';

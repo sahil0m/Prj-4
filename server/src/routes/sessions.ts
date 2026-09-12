@@ -5,6 +5,7 @@ import { env } from '../config.js';
 import { Session } from '../models/index.js';
 import { requireAuth, type AuthedRequest } from '../middleware/requireAuth.js';
 import * as sessions from '../services/sessions.js';
+import * as exports from '../services/export.js';
 
 /**
  * Session lifecycle over HTTP.
@@ -41,7 +42,7 @@ export function sessionRoutes(): Router {
         res.json({
           title: session.title,
           state: session.state,
-          collectNames: sessions.snapshotOf(session).settings?.collectNames === true,
+          collectNames: sessions.collectsNames(session),
         });
       } catch (err) {
         next(err);
@@ -117,6 +118,56 @@ export function sessionRoutes(): Router {
         }
 
         res.json({ results });
+      } catch (err) {
+        next(err);
+      }
+    })();
+  });
+
+  /* ---------------- export ---------------- */
+
+  /**
+   * The session's data, in whichever shape the presenter wants.
+   *
+   * Results belong to the person who ran the session. A tool that makes them
+   * hard to get out is one nobody should rely on.
+   */
+  router.get('/:sessionId/export', (req, res, next) => {
+    void (async () => {
+      try {
+        const { format } = z
+          .object({ format: z.enum(['csv', 'leaderboard', 'json']).default('csv') })
+          .parse(req.query);
+
+        const session = await Session.findOne({
+          _id: req.params.sessionId,
+          ownerId: ownerOf(req),
+        });
+
+        if (!session) {
+          res.status(404).json({ error: 'That session was not found.', code: 'session_not_found' });
+          return;
+        }
+
+        if (format === 'json') {
+          const name = exports.exportFilename(session, 'results', 'json');
+          res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
+          res.json(await exports.sessionJson(session));
+          return;
+        }
+
+        const csv =
+          format === 'leaderboard'
+            ? await exports.leaderboardCsv(session)
+            : await exports.responsesCsv(session);
+
+        const name = exports.exportFilename(session, format, 'csv');
+
+        // The BOM is what makes Excel open a UTF-8 CSV correctly; without it
+        // every accented name and emoji arrives mangled.
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
+        res.send('﻿' + csv);
       } catch (err) {
         next(err);
       }

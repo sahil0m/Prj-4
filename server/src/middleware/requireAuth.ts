@@ -7,6 +7,7 @@ export interface AuthedUser {
   id: string;
   email: string;
   name: string;
+  role: 'user' | 'admin';
 }
 
 export interface AuthedRequest extends Request {
@@ -38,7 +39,7 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction): v
       }
 
       const user = await User.findOne({ _id: claims.sub, deletedAt: null })
-        .select('tokenVersion email name')
+        .select('tokenVersion email name role suspendedAt suspendedReason')
         .lean();
 
       if (!user) {
@@ -49,10 +50,21 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction): v
         throw new HttpError(401, 'Your session ended. Please sign in again.', 'token_revoked');
       }
 
+      // Checked on every request rather than only at sign-in, so suspending
+      // an account stops it immediately rather than when a token expires.
+      if (user.suspendedAt) {
+        throw new HttpError(
+          403,
+          user.suspendedReason || 'This account has been suspended.',
+          'account_suspended',
+        );
+      }
+
       (req as AuthedRequest).user = {
         id: claims.sub,
         email: user.email,
         name: user.name,
+        role: user.role,
       };
 
       next();
@@ -78,11 +90,16 @@ export function optionalAuth(req: Request, _res: Response, next: NextFunction): 
     try {
       const claims = verifyAccessToken(header.slice(7));
       const user = await User.findOne({ _id: claims.sub, deletedAt: null })
-        .select('tokenVersion email name')
+        .select('tokenVersion email name role suspendedAt')
         .lean();
 
-      if (user?.tokenVersion === claims.tv) {
-        (req as AuthedRequest).user = { id: claims.sub, email: user.email, name: user.name };
+      if (user?.tokenVersion === claims.tv && !user.suspendedAt) {
+        (req as AuthedRequest).user = {
+          id: claims.sub,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+        };
       }
     } catch {
       // A bad token on an optional route is simply ignored.
@@ -90,4 +107,22 @@ export function optionalAuth(req: Request, _res: Response, next: NextFunction): 
 
     next();
   })();
+}
+
+/**
+ * Requires an admin.
+ *
+ * Mounted after requireAuth, and returns 404 rather than 403 for a
+ * non-admin: confirming that an admin area exists tells an attacker where
+ * to aim, and an ordinary user has no reason to know either way.
+ */
+export function requireAdmin(req: Request, res: Response, next: NextFunction): void {
+  const user = (req as AuthedRequest).user;
+
+  if (user.role !== 'admin') {
+    res.status(404).json({ error: 'Not found.', code: 'not_found' });
+    return;
+  }
+
+  next();
 }
