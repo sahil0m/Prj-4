@@ -85,6 +85,10 @@ export function SignIn() {
       expired: 'That sign-in attempt timed out. Please try again.',
       invalid_state: 'That sign-in link was not valid. Please try again.',
       google_failed: 'Google sign-in did not work. Please try again.',
+      // Not a fault to retry: someone decided this.
+      account_suspended: 'This account has been suspended. Contact an administrator.',
+      email_unverified_at_provider:
+        'That email already has an account here. Sign in with your password first, then link Google.',
     };
     return messages[code] ?? 'Sign-in failed. Please try again.';
   }, []);

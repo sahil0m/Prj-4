@@ -338,10 +338,23 @@ export function authRoutes(): Router {
         setSession(res, session);
         finish('/auth/complete');
       } catch (err) {
-        logger.error({ err }, 'Google callback failed');
         res.clearCookie(OAUTH_STATE_COOKIE, oauthCookieOptions());
         res.clearCookie(OAUTH_VERIFIER_COOKIE, oauthCookieOptions());
-        res.redirect(`${env.CLIENT_ORIGIN}/signin?error=google_failed`);
+
+        /*
+         * Some failures here are decisions, not faults. Telling someone
+         * whose account was suspended to "try again" invites them to try
+         * again forever, and buries the real reason in a server log they
+         * cannot read. Codes the sign-in screen knows how to explain are
+         * passed through; anything else stays generic.
+         */
+        const code = err instanceof HttpError ? err.code : null;
+        const known = code === 'account_suspended' || code === 'email_unverified_at_provider';
+
+        if (known) logger.info({ code }, 'Google sign-in refused');
+        else logger.error({ err }, 'Google callback failed');
+
+        res.redirect(`${env.CLIENT_ORIGIN}/signin?error=${known ? code : 'google_failed'}`);
       }
     })();
   });

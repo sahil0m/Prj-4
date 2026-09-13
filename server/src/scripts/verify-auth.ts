@@ -495,6 +495,72 @@ async function main() {
     );
   });
 
+  /* ---------------- suspension ---------------- */
+
+  /*
+   * Every authenticated request already refused a suspended account, so
+   * this was "enforced" -- but only after a successful sign-in, a redirect
+   * to the dashboard and a screen of failing requests. Refusing at the
+   * door is the difference between a decision and a bug.
+   */
+  await check('a suspended account cannot sign in', async () => {
+    const suspendedEmail = `suspended-${stamp}@example.test`;
+    const made = await auth.register(
+      { email: suspendedEmail, password: PASSWORD, name: 'Suspended' },
+      DEVICE,
+    );
+    createdUserIds.push(made.user._id.toString());
+
+    await User.updateOne(
+      { _id: made.user._id },
+      { $set: { suspendedAt: new Date(), suspendedReason: 'Testing' } },
+    );
+
+    await expectFailure(
+      () => auth.login(suspendedEmail, PASSWORD, DEVICE),
+      'account_suspended',
+      'sign-in by a suspended account',
+    );
+  });
+
+  await check('the wrong password on a suspended account still says wrong password', async () => {
+    const suspendedEmail = `suspended2-${stamp}@example.test`;
+    const made = await auth.register(
+      { email: suspendedEmail, password: PASSWORD, name: 'Suspended Two' },
+      DEVICE,
+    );
+    createdUserIds.push(made.user._id.toString());
+
+    await User.updateOne({ _id: made.user._id }, { $set: { suspendedAt: new Date() } });
+
+    // Credentials are checked first on purpose. Announcing the suspension
+    // to someone who does not know the password would tell anyone who
+    // asked which addresses have suspended accounts.
+    await expectFailure(
+      () => auth.login(suspendedEmail, 'not-the-password', DEVICE),
+      'invalid_credentials',
+      'a bad password on a suspended account',
+    );
+  });
+
+  await check('restoring an account lets it sign in again', async () => {
+    const restoredEmail = `restored-${stamp}@example.test`;
+    const made = await auth.register(
+      { email: restoredEmail, password: PASSWORD, name: 'Restored' },
+      DEVICE,
+    );
+    createdUserIds.push(made.user._id.toString());
+
+    await User.updateOne({ _id: made.user._id }, { $set: { suspendedAt: new Date() } });
+    await User.updateOne(
+      { _id: made.user._id },
+      { $set: { suspendedAt: null, suspendedReason: '' } },
+    );
+
+    const result = await auth.login(restoredEmail, PASSWORD, DEVICE);
+    assert(result.user._id.toString() === made.user._id.toString(), 'restored account was refused');
+  });
+
   /* ---------------- cleanup ---------------- */
 
   process.stdout.write(`\n${D}Cleaning up...${X}\n`);

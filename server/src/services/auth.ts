@@ -153,6 +153,27 @@ export async function register(
 /* Login                                                               */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Refuses a suspended account.
+ *
+ * Every authenticated request already checks this, so a suspended user was
+ * blocked -- but only after signing in successfully, landing on the
+ * dashboard and watching every request fail. That reads as a broken
+ * product rather than a decision someone made, and gives no reason.
+ *
+ * Called after credentials are verified, never before: refusing early
+ * would tell anyone who asked which addresses have suspended accounts.
+ */
+function assertNotSuspended(user: UserDoc): void {
+  if (!user.suspendedAt) return;
+
+  throw new HttpError(
+    403,
+    user.suspendedReason || 'This account has been suspended.',
+    'account_suspended',
+  );
+}
+
 export async function login(
   email: string,
   password: string,
@@ -169,6 +190,8 @@ export async function login(
   if (!user || !ok || !user.passwordHash) {
     throw new HttpError(401, 'That email or password is not right.', 'invalid_credentials');
   }
+
+  assertNotSuspended(user);
 
   user.lastSeenAt = new Date();
   await user.save();
@@ -294,6 +317,7 @@ export async function socialLogin(
   });
 
   if (linked) {
+    assertNotSuspended(linked);
     linked.lastSeenAt = new Date();
     await linked.save();
     return { user: linked, session: await issueSession(linked, device), created: false };
@@ -302,6 +326,8 @@ export async function socialLogin(
   const byEmail = await User.findOne({ email, deletedAt: null });
 
   if (byEmail) {
+    assertNotSuspended(byEmail);
+
     if (!profile.emailVerified) {
       throw new HttpError(
         409,
