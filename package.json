@@ -28,6 +28,7 @@
     "dev:client": "npm run dev -w client",
     "dev:join": "npm run dev -w join",
     "dev:stop": "node scripts/free-ports.mjs",
+    "icons": "node scripts/build-icons.mjs",
     "dev:client:only": "npm run theme:build && npm run dev -w client"
   },
   "devDependencies": {
