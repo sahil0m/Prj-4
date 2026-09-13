@@ -14,7 +14,7 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "dev": "npm run theme:build && concurrently -n server,client -c green,magenta -k \"npm:dev:server\" \"npm:dev:client\"",
+    "dev": "npm run theme:build && concurrently -n server,client,join -c green,magenta,cyan -k \"npm:dev:server\" \"npm:dev:client\" \"npm:dev:join\"",
     "build": "npm run theme:build && npm run build --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "eslint . --max-warnings 0",
@@ -26,6 +26,7 @@
     "theme:build": "npm run build -w shared && node scripts/build-theme.mjs",
     "dev:server": "npm run dev -w server",
     "dev:client": "npm run dev -w client",
+    "dev:join": "npm run dev -w join",
     "dev:client:only": "npm run theme:build && npm run dev -w client"
   },
   "devDependencies": {
