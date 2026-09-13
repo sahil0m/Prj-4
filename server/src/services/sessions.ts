@@ -146,8 +146,19 @@ export async function startSession(deckId: string, ownerId: string): Promise<Ses
 export async function endSession(sessionId: string, ownerId: string): Promise<SessionDoc> {
   const session = await ownedSession(sessionId, ownerId);
 
+  // Ending twice is normal: the presenter's socket and its REST fallback
+  // both run, so the second arrives moments after the first.
+  if (session.state === 'closed' && session.endedAt) return session;
+
   session.state = 'closed';
-  session.endedAt = new Date();
+  /*
+   * The first ending is the real one.
+   *
+   * Retention is measured from this timestamp -- answers are purged a year
+   * after a session closed -- so overwriting it on a second call would
+   * quietly restart the clock on data that was due to be removed.
+   */
+  session.endedAt ??= new Date();
   session.participationOpen = false;
   await session.save();
 

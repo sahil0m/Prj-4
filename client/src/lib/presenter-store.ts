@@ -249,16 +249,49 @@ export const usePresenter = create<PresenterStore>((set, get) => ({
     socket?.emit('presenter:results-visible', { visible }, () => undefined);
   },
 
+  /**
+   * Ends the session for everyone.
+   *
+   * This used to go over the socket alone, and resolve immediately when
+   * there was no socket -- so a presenter whose connection had dropped
+   * pressed End, was taken back to their decks, and left a live session
+   * behind them. The join code kept working and people kept joining,
+   * until the cleanup job closed it a day later.
+   *
+   * The socket is still tried first, because it tells every phone at
+   * once. But it is only an optimisation now: the REST call is what
+   * actually decides, and it runs whether the socket answered or not.
+   * Ending a session is the one action here that must not half-happen.
+   */
   async end() {
+    const sessionId = get().session?.id ?? null;
+
     await new Promise<void>((resolve) => {
-      if (!socket) {
+      if (!socket?.connected) {
         resolve();
         return;
       }
+
+      // Without a deadline a server that never acknowledges leaves the
+      // button spinning for as long as the presenter is willing to wait.
+      const timer = setTimeout(resolve, 3000);
+
       socket.emit('presenter:end', () => {
+        clearTimeout(timer);
         resolve();
       });
     });
+
+    if (sessionId) {
+      try {
+        await api.endSession(sessionId);
+      } catch (err) {
+        // Already closed is the expected outcome when the socket got
+        // there first, and is not worth reporting.
+        if (!(err instanceof ApiError)) throw err;
+      }
+    }
+
     get().close();
   },
 }));
