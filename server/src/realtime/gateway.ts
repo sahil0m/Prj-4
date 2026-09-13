@@ -20,6 +20,7 @@ import {
   zRemoveResponse,
   zAskQuestion,
   zReaction,
+  zParticipantMove,
   type ServerEvents,
   type ClientEvents,
   type AckResult,
@@ -341,6 +342,39 @@ export function attachRealtime(
           ack({ ok: true, entries, you: participantId });
         } catch {
           ack({ ok: false, code: 'internal', message: 'Something went wrong.' });
+        }
+      })();
+    });
+
+    socket.on('participant:move', (raw, ack) => {
+      void (async () => {
+        try {
+          const { sessionId, participantId } = context;
+          if (!sessionId || !participantId) {
+            ack({ ok: false, code: 'not_joined', message: 'Join the session first.' });
+            return;
+          }
+
+          const input = zParticipantMove.parse(raw);
+          const session = await Session.findById(sessionId);
+
+          if (!session) {
+            ack({ ok: false, code: 'session_not_found', message: 'That session has ended.' });
+            return;
+          }
+
+          const slide = await sessions.moveParticipant(
+            session,
+            new Types.ObjectId(participantId),
+            input.direction,
+          );
+
+          // Only to this socket: in a self-paced session everyone is
+          // somewhere different, and broadcasting would drag the room along.
+          socket.emit('slide:show', slide);
+          ack({ ok: true });
+        } catch (err) {
+          ack(toAck(err));
         }
       })();
     });

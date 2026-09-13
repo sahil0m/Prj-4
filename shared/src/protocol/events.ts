@@ -81,6 +81,11 @@ export const zPresenterJoin = z.object({ sessionId: z.string().max(64) });
 
 export const zGoToSlide = z.object({ slideId: z.string().max(64) });
 
+/** A participant moving themselves, in an audience-paced session. */
+export const zParticipantMove = z.object({
+  direction: z.enum(['next', 'previous']),
+});
+
 export const zSetParticipation = z.object({ open: z.boolean() });
 
 export const zSetResultsVisible = z.object({ visible: z.boolean() });
@@ -109,6 +114,11 @@ export interface ParticipantSlide {
   config: Record<string, unknown>;
   /** Answers this device has already submitted for this slide. */
   answered: boolean;
+  /** Position in the deck, so a self-paced phone can show progress. */
+  index: number;
+  total: number;
+  /** Whether this person may move themselves. */
+  selfPaced: boolean;
 }
 
 /** One slide's tallied results. Shape depends on the kind. */
@@ -221,6 +231,18 @@ export interface ClientEvents {
    * constant traffic nobody is looking at.
    */
   'participant:leaderboard': (ack: (result: LeaderboardResult) => void) => void;
+
+  /**
+   * Moving through the deck at your own pace.
+   *
+   * Refused in a presenter-paced session: everyone follows one screen
+   * there, and a phone that could move itself would be answering a
+   * different question from the one on the wall.
+   */
+  'participant:move': (
+    payload: z.input<typeof zParticipantMove>,
+    ack: (result: AckResult) => void,
+  ) => void;
 }
 
 export type LeaderboardResult =

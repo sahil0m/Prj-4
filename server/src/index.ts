@@ -4,6 +4,7 @@ import { logger } from './lib/logger.js';
 import { connectDb, disconnectDb } from './lib/db.js';
 import { createApp } from './app.js';
 import { attachRealtime } from './realtime/gateway.js';
+import { startCleanup } from './jobs/cleanup.js';
 
 /**
  * Process entry point.
@@ -28,6 +29,9 @@ async function main(): Promise<void> {
   // Attached before the port opens, so a client that connects the instant
   // the server is up finds the socket handler already listening.
   const io = attachRealtime(server);
+
+  // Retention, which two model comments promised and nothing implemented.
+  const stopCleanup = startCleanup();
 
   // Slightly above a typical 60s load-balancer idle timeout, so the balancer
   // closes idle connections rather than the app racing it.
@@ -59,6 +63,8 @@ async function main(): Promise<void> {
       process.exit(1);
     }, 15_000);
     forceExit.unref();
+
+    stopCleanup();
 
     // Sockets first: a phone told the session is closing can show that,
     // where a socket killed with the process just looks like a crash.

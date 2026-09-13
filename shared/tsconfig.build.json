@@ -1,0 +1,11 @@
+{
+  // What actually ships. The editor and ESLint use tsconfig.json, which
+  // includes the tests so they get the same type checking as the code they
+  // cover; this config drops them so compiled copies never reach dist,
+  // where the test runner would collect them a second time.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./tsconfig.build.tsbuildinfo"
+  },
+  "exclude": ["src/**/*.test.ts"]
+}

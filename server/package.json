@@ -14,7 +14,8 @@
     "auth:verify": "tsx src/scripts/verify-auth.ts",
     "decks:verify": "tsx src/scripts/verify-decks.ts",
     "realtime:verify": "tsx src/scripts/verify-realtime.ts",
-    "admin:grant": "tsx src/scripts/make-admin.ts"
+    "admin:grant": "tsx src/scripts/make-admin.ts",
+    "cleanup:verify": "tsx src/scripts/verify-cleanup.ts"
   },
   "dependencies": {
     "@pulse/shared": "*",

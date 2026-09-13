@@ -31,6 +31,16 @@ const participantSchema = new Schema(
     /** Running quiz total, updated as answers arrive. */
     score: { type: Number, default: 0 },
 
+    /**
+     * Where this person has reached, in an audience-paced session.
+     *
+     * Null while the presenter is driving. Stored per participant rather
+     * than derived from their answers, because someone may skip a question
+     * or go back to one, and their position is not the same as the last
+     * thing they happened to answer.
+     */
+    currentSlideId: { type: String, default: null, maxlength: 64 },
+
     firstSeenAt: { type: Date, default: Date.now },
     lastSeenAt: { type: Date, default: Date.now },
 

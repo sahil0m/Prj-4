@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { scoreAnswer, pointsFor, buildLeaderboard, type ScoreRow } from './scoring.js';
+import {
+  scoreAnswer,
+  pointsFor,
+  buildLeaderboard,
+  difficultyWeight,
+  type ScoreRow,
+} from './scoring.js';
 
 const QUIZ = { pointsMax: 1000, pointsMin: 500, countdownSeconds: 20 };
 
@@ -12,9 +18,23 @@ describe('pointsFor', () => {
     expect(pointsFor(20_000, QUIZ).points).toBe(500);
   });
 
-  it('scales linearly in between', () => {
-    expect(pointsFor(10_000, QUIZ).points).toBe(750);
-    expect(pointsFor(5_000, QUIZ).points).toBe(875);
+  it('keeps most of the bonus early, then drops away', () => {
+    // The curve exists so the opening seconds are worth racing for. Half
+    // the clock still leaves most of the bonus; the last quarter is where
+    // it actually costs.
+    const quarter = pointsFor(5_000, QUIZ).points;
+    const half = pointsFor(10_000, QUIZ).points;
+    const threeQuarters = pointsFor(15_000, QUIZ).points;
+
+    expect(quarter).toBeGreaterThan(half);
+    expect(half).toBeGreaterThan(threeQuarters);
+
+    // Half way through, a correct answer is still worth well over 90% of
+    // the maximum — a thoughtful answer is not punished.
+    expect(half).toBeGreaterThan(900);
+
+    // The final quarter is where the cost lands.
+    expect(quarter - half).toBeLessThan(half - threeQuarters);
   });
 
   it('never exceeds the maximum, however early', () => {
@@ -22,8 +42,25 @@ describe('pointsFor', () => {
     expect(pointsFor(-5000, QUIZ).points).toBe(1000);
   });
 
-  it('never falls below the minimum, however late', () => {
-    expect(pointsFor(600_000, QUIZ).points).toBe(500);
+  it('scores nothing at all once the clock has expired', () => {
+    // Clamping to the minimum meant someone answering a minute into a
+    // twenty second question earned as much as someone who just made it,
+    // which rewards not trying.
+    const late = pointsFor(60_000, QUIZ);
+    expect(late.points).toBe(0);
+    expect(late.tooLate).toBe(true);
+  });
+
+  it('allows a moment of grace for the network', () => {
+    // A tap as the clock hits zero still has to travel. Being punished for
+    // latency is not the game.
+    const justOver = pointsFor(20_400, QUIZ);
+    expect(justOver.tooLate).toBe(false);
+    expect(justOver.points).toBeGreaterThan(0);
+  });
+
+  it('never falls below the minimum while the clock is still running', () => {
+    expect(pointsFor(20_000, QUIZ).points).toBe(500);
   });
 
   it('handles a zero-length countdown without dividing by zero', () => {
@@ -280,5 +317,107 @@ describe('buildLeaderboard', () => {
 
   it('returns an empty board rather than throwing when nobody played', () => {
     expect(buildLeaderboard([])).toEqual([]);
+  });
+});
+
+describe('difficultyWeight', () => {
+  it('treats a question everyone answered correctly as worth slightly less', () => {
+    expect(difficultyWeight(10, 10)).toBeLessThan(1);
+  });
+
+  it('treats a question nobody got as worth more', () => {
+    expect(difficultyWeight(0, 10)).toBeGreaterThan(1.4);
+  });
+
+  it('treats an even split as about face value', () => {
+    const weight = difficultyWeight(5, 10);
+    expect(weight).toBeGreaterThan(1.1);
+    expect(weight).toBeLessThan(1.25);
+  });
+
+  it('does not infer difficulty from one or two answers', () => {
+    // Two people getting it wrong says nothing about the question.
+    expect(difficultyWeight(0, 2)).toBe(1);
+    expect(difficultyWeight(1, 1)).toBe(1);
+  });
+
+  it('stays within a narrow band, so one question cannot decide everything', () => {
+    for (let correct = 0; correct <= 20; correct += 1) {
+      const weight = difficultyWeight(correct, 20);
+      expect(weight).toBeGreaterThanOrEqual(0.85);
+      expect(weight).toBeLessThanOrEqual(1.5);
+    }
+  });
+});
+
+describe('leaderboard detail', () => {
+  const row = (
+    participantId: string,
+    displayName: string,
+    points: number,
+    correct: boolean,
+    elapsedMs?: number,
+    slideIndex?: number,
+  ): ScoreRow => ({ participantId, displayName, points, correct, elapsedMs, slideIndex });
+
+  it('reports accuracy as a percentage', () => {
+    const board = buildLeaderboard([
+      row('p1', 'Ana', 900, true),
+      row('p1', 'Ana', 0, false),
+      row('p1', 'Ana', 800, true),
+      row('p1', 'Ana', 0, false),
+    ]);
+
+    expect(board[0]?.accuracy).toBe(50);
+  });
+
+  it('averages only the time taken over correct answers', () => {
+    const board = buildLeaderboard([
+      row('p1', 'Ana', 900, true, 2000),
+      row('p1', 'Ana', 0, false, 19_000),
+      row('p1', 'Ana', 800, true, 4000),
+    ]);
+
+    // 2s and 4s, not the 19s spent being wrong.
+    expect(board[0]?.averageSeconds).toBe(3);
+  });
+
+  it('reports no average when nothing was answered correctly', () => {
+    const board = buildLeaderboard([row('p1', 'Ana', 0, false, 5000)]);
+    expect(board[0]?.averageSeconds).toBe(null);
+  });
+
+  it('measures the longest run of correct answers', () => {
+    const board = buildLeaderboard([
+      row('p1', 'Ana', 900, true, 1000, 0),
+      row('p1', 'Ana', 900, true, 1000, 1),
+      row('p1', 'Ana', 0, false, 1000, 2),
+      row('p1', 'Ana', 900, true, 1000, 3),
+      row('p1', 'Ana', 900, true, 1000, 4),
+      row('p1', 'Ana', 900, true, 1000, 5),
+    ]);
+
+    // Three at the end beats two at the start.
+    expect(board[0]?.bestStreak).toBe(3);
+  });
+
+  it('measures a streak in slide order, not arrival order', () => {
+    // Answers can arrive out of order in a self-paced session.
+    const board = buildLeaderboard([
+      row('p1', 'Ana', 900, true, 1000, 2),
+      row('p1', 'Ana', 0, false, 1000, 1),
+      row('p1', 'Ana', 900, true, 1000, 0),
+    ]);
+
+    expect(board[0]?.bestStreak).toBe(1);
+  });
+
+  it('breaks a tie on points and accuracy by who was faster', () => {
+    const board = buildLeaderboard([
+      row('p1', 'Slow', 1000, true, 15_000),
+      row('p2', 'Quick', 1000, true, 2000),
+    ]);
+
+    expect(board[0]?.displayName).toBe('Quick');
   });
 });

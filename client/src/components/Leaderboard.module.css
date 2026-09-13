@@ -257,3 +257,54 @@
     display: none;
   }
 }
+
+/* ---------------- detail ---------------- */
+
+/*
+ * Accuracy, streak and pace, next to the raw count.
+ *
+ * 3/5 and 30/50 are the same skill but look different; the percentage is
+ * what someone actually compares themselves on.
+ */
+.accuracy {
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  font-size: clamp(11.5px, 1vw, 15px);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-ink-muted);
+  background: color-mix(in srgb, var(--color-ink) 9%, transparent);
+}
+
+.accuracy[data-strong='true'] {
+  color: var(--color-positive);
+  background: color-mix(in srgb, var(--color-positive) 14%, transparent);
+}
+
+.streak {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  font-size: clamp(11.5px, 1vw, 15px);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-caution);
+  background: color-mix(in srgb, var(--color-caution) 15%, transparent);
+}
+
+.speed {
+  font-size: clamp(11px, 0.95vw, 14px);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-ink-subtle);
+}
+
+/* On a narrow screen the name and the score are what matter; the rest goes
+   before the layout starts to crowd. */
+@media (max-width: 900px) {
+  .speed,
+  .streak {
+    display: none;
+  }
+}

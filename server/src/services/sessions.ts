@@ -228,6 +228,17 @@ function textOf(payload: unknown): string {
   return '';
 }
 
+/**
+ * Whether people move through the deck themselves.
+ *
+ * In this mode the presenter's own position is only a starting point;
+ * everyone advances at their own speed, which suits a survey left open for
+ * a week as much as a workshop where groups work at different rates.
+ */
+export function isSelfPaced(session: SessionDoc): boolean {
+  return snapshotOf(session).settings?.mode === 'audience_paced';
+}
+
 /** Whether reactions are allowed. On unless the author turned them off. */
 export function allowsReactions(session: SessionDoc): boolean {
   return snapshotOf(session).settings?.reactions !== false;
@@ -474,7 +485,7 @@ export async function leaderboardFor(
     deletedAt: null,
     points: { $ne: null },
   })
-    .select('participantId points isCorrect')
+    .select('participantId points isCorrect elapsedMs slideId')
     .lean();
 
   if (rows.length === 0) return [];
@@ -486,6 +497,10 @@ export async function leaderboardFor(
 
   const names = new Map(participants.map((p) => [p._id.toString(), p.displayName]));
 
+  // Slide order, so a streak means consecutive questions rather than
+  // whichever answers happened to arrive together.
+  const order = new Map(snapshotOf(session).slides.map((slide, index) => [slide.id, index]));
+
   return buildLeaderboard(
     rows.map((row) => {
       const id = (row.participantId as Types.ObjectId).toString();
@@ -494,6 +509,8 @@ export async function leaderboardFor(
         displayName: names.get(id) ?? '',
         points: row.points ?? 0,
         correct: row.isCorrect === true,
+        elapsedMs: row.elapsedMs ?? undefined,
+        slideIndex: order.get(row.slideId),
       };
     }),
     previous,
@@ -591,8 +608,22 @@ export async function participantSlideOf(
   session: SessionDoc,
   participantId: Types.ObjectId,
 ): Promise<ParticipantSlide | null> {
-  const slide = slideOf(session, session.currentSlideId ?? null);
+  const selfPaced = isSelfPaced(session);
+
+  // In a self-paced session each person has their own position; otherwise
+  // everyone is wherever the presenter is.
+  let slideId = session.currentSlideId ?? null;
+
+  if (selfPaced) {
+    const participant = await Participant.findById(participantId).select('currentSlideId').lean();
+    slideId = participant?.currentSlideId ?? session.currentSlideId ?? null;
+  }
+
+  const slide = slideOf(session, slideId);
   if (!slide) return null;
+
+  const slides = snapshotOf(session).slides;
+  const index = slides.findIndex((s) => s.id === slide.id);
 
   const answered = await Response.exists({
     sessionId: session._id,
@@ -606,7 +637,56 @@ export async function participantSlideOf(
     kind: slide.kind,
     config: stripAnswers(slide.kind, slide.config),
     answered: answered !== null,
+    index: index === -1 ? 0 : index,
+    total: slides.length,
+    selfPaced,
   };
+}
+
+/**
+ * Moves one participant through a self-paced deck.
+ *
+ * Refused when the presenter is driving: everyone follows one screen there,
+ * and a phone that could move itself would be answering a different
+ * question from the one on the wall.
+ */
+export async function moveParticipant(
+  session: SessionDoc,
+  participantId: Types.ObjectId,
+  direction: 'next' | 'previous',
+): Promise<ParticipantSlide | null> {
+  if (!isSelfPaced(session)) {
+    throw new HttpError(409, 'The presenter is leading this session.', 'not_self_paced');
+  }
+
+  const participant = await Participant.findById(participantId);
+  if (!participant) {
+    throw new HttpError(404, 'You are not in this session.', 'participant_not_found');
+  }
+
+  const slides = snapshotOf(session).slides;
+  const currentId = participant.currentSlideId ?? session.currentSlideId ?? slides[0]?.id ?? null;
+  const current = slides.findIndex((s) => s.id === currentId);
+
+  // Skipped slides are stepped over rather than shown as a blank screen.
+  const step = direction === 'next' ? 1 : -1;
+  let target = (current === -1 ? 0 : current) + step;
+
+  while (target >= 0 && target < slides.length && slides[target]?.config.skipped === true) {
+    target += step;
+  }
+
+  // Clamped rather than wrapped: reaching the end should stay at the end,
+  // not silently return someone to the first question.
+  if (target < 0 || target >= slides.length) {
+    return participantSlideOf(session, participantId);
+  }
+
+  participant.currentSlideId = slides[target]?.id ?? null;
+  participant.lastSeenAt = new Date();
+  await participant.save();
+
+  return participantSlideOf(session, participantId);
 }
 
 /** Removes anything that would give away a quiz answer. */

@@ -80,7 +80,7 @@ responseSchema.index(
   { partialFilterExpression: { points: { $ne: null } } },
 );
 
-/** Retention purge job. */
+/** Used by jobs/cleanup.ts to purge answers from long finished sessions. */
 responseSchema.index({ submittedAt: 1 });
 
 export type ResponseDoc = HydratedDocument<InferSchemaType<typeof responseSchema>>;

@@ -89,7 +89,7 @@ const deckSchema = new Schema(
     revision: { type: Number, default: 1 },
 
     archivedAt: { type: Date, default: null },
-    /** Soft delete; a job purges rows older than 30 days. */
+    /** Soft delete. jobs/cleanup.ts purges rows older than 30 days. */
     deletedAt: { type: Date, default: null, index: true },
   },
   { timestamps: true },

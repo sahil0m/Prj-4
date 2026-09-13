@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'motion/react';
-import { Trophy, ChevronUp, ChevronDown, Minus } from 'lucide-react';
+import { Trophy, ChevronUp, ChevronDown, Minus, Flame } from 'lucide-react';
 import type { LeaderboardEntry } from '@pulse/shared';
 import styles from './Leaderboard.module.css';
 
@@ -61,9 +61,29 @@ export function Leaderboard({
               <Movement change={entry.change} />
 
               <span className={styles.stats}>
-                <span className={styles.correct}>
+                <span className={styles.correct} title="Correct out of answered">
                   {entry.correctCount}/{entry.answeredCount}
                 </span>
+
+                {/* Accuracy, because 3/5 and 30/50 are the same skill and a
+                    raw count makes them look different. */}
+                <span className={styles.accuracy} data-strong={entry.accuracy >= 80}>
+                  {entry.accuracy}%
+                </span>
+
+                {/* A streak is the thing people talk about afterwards. */}
+                {entry.bestStreak >= 3 && (
+                  <span className={styles.streak} title="Longest run of correct answers">
+                    <Flame size={12} />
+                    {entry.bestStreak}
+                  </span>
+                )}
+
+                {entry.averageSeconds !== null && (
+                  <span className={styles.speed} title="Average time on correct answers">
+                    {entry.averageSeconds}s
+                  </span>
+                )}
               </span>
 
               <motion.span
