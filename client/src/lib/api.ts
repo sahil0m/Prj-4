@@ -274,9 +274,14 @@ export const api = {
 
   /* ---------------- sessions ---------------- */
 
-  listSessions: (options: { deckId?: string } = {}): Promise<{ sessions: PastSession[] }> => {
+  listSessions: (
+    options: { deckId?: string; from?: string; to?: string } = {},
+  ): Promise<{ sessions: PastSession[] }> => {
     const params = new URLSearchParams();
     if (options.deckId) params.set('deckId', options.deckId);
+    // Dates as YYYY-MM-DD, straight from a date input.
+    if (options.from) params.set('from', options.from);
+    if (options.to) params.set('to', options.to);
     const query = params.toString();
     return request(`/sessions${query ? `?${query}` : ''}`);
   },

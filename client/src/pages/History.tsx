@@ -29,16 +29,36 @@ export function History() {
 
   const [sessions, setSessions] = useState<PastSession[] | null>(null);
 
+  /*
+   * The date range.
+   *
+   * A teacher looking for "the quizzes I ran in March" was scrolling a
+   * list sorted by date and downloading them one at a time. Both ends are
+   * optional, so this is also just "everything since the first of the
+   * month" without having to name an end.
+   */
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+
   useEffect(() => {
+    let cancelled = false;
+    setSessions(null);
+
     void api
-      .listSessions()
+      .listSessions({ from: from || undefined, to: to || undefined })
       .then((result) => {
-        setSessions(result.sessions);
+        if (!cancelled) setSessions(result.sessions);
       })
       .catch(() => {
-        setSessions([]);
+        if (!cancelled) setSessions([]);
       });
-  }, []);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [from, to]);
+
+  const filtered = from !== '' || to !== '';
 
   const download = (sessionId: string, format: 'csv' | 'leaderboard' | 'json') => {
     // A navigation rather than fetch-and-blob: the response carries a
@@ -61,6 +81,49 @@ export function History() {
           <ArrowLeft size={18} />
         </button>
         <h1 className={styles.title}>Past sessions</h1>
+
+        <div className={styles.filters}>
+          <label className={styles.filter}>
+            <span className={styles.filterLabel}>From</span>
+            <input
+              type="date"
+              className={styles.date}
+              value={from}
+              // Cannot start after it ends; the browser enforces it rather
+              // than the page having to explain an empty result.
+              max={to || undefined}
+              onChange={(event) => {
+                setFrom(event.target.value);
+              }}
+            />
+          </label>
+
+          <label className={styles.filter}>
+            <span className={styles.filterLabel}>To</span>
+            <input
+              type="date"
+              className={styles.date}
+              value={to}
+              min={from || undefined}
+              onChange={(event) => {
+                setTo(event.target.value);
+              }}
+            />
+          </label>
+
+          {filtered && (
+            <button
+              type="button"
+              className={styles.clear}
+              onClick={() => {
+                setFrom('');
+                setTo('');
+              }}
+            >
+              Clear
+            </button>
+          )}
+        </div>
       </header>
 
       <main className={styles.main}>
@@ -71,10 +134,36 @@ export function History() {
         ) : sessions.length === 0 ? (
           <div className={styles.empty}>
             <Radio size={30} className={styles.emptyIcon} />
-            <h2 className={styles.emptyTitle}>Nothing run yet</h2>
-            <p className={styles.emptyBody}>
-              Present a deck and it will appear here, with its results to download.
-            </p>
+
+            {/* An empty range and an empty history need different advice.
+                Telling someone to go and present something, when they have
+                presented plenty and merely picked the wrong fortnight, is
+                the sort of thing that makes a filter feel broken. */}
+            {filtered ? (
+              <>
+                <h2 className={styles.emptyTitle}>Nothing in these dates</h2>
+                <p className={styles.emptyBody}>
+                  No sessions ran in that range. Try widening it, or clear the filter.
+                </p>
+                <button
+                  type="button"
+                  className={styles.clear}
+                  onClick={() => {
+                    setFrom('');
+                    setTo('');
+                  }}
+                >
+                  Clear dates
+                </button>
+              </>
+            ) : (
+              <>
+                <h2 className={styles.emptyTitle}>Nothing run yet</h2>
+                <p className={styles.emptyBody}>
+                  Present a deck and it will appear here, with its results to download.
+                </p>
+              </>
+            )}
           </div>
         ) : (
           <motion.div

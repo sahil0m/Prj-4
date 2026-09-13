@@ -67,12 +67,35 @@ export function sessionRoutes(): Router {
         const query = z
           .object({
             deckId: z.string().max(64).optional(),
+            /* Dates as YYYY-MM-DD, which is what a date input produces. */
+            from: z
+              .string()
+              .regex(/^\d{4}-\d{2}-\d{2}$/)
+              .optional(),
+            to: z
+              .string()
+              .regex(/^\d{4}-\d{2}-\d{2}$/)
+              .optional(),
             limit: z.coerce.number().int().min(1).max(100).default(50),
           })
           .parse(req.query);
 
         const filter: Record<string, unknown> = { ownerId: ownerOf(req) };
         if (query.deckId) filter.deckId = query.deckId;
+
+        /*
+         * Both ends inclusive, and read in the server's timezone.
+         *
+         * "To" covers the whole of that day rather than stopping at
+         * midnight: someone filtering to today and seeing nothing from
+         * this morning would reasonably conclude the filter is broken.
+         */
+        if (query.from ?? query.to) {
+          const range: Record<string, Date> = {};
+          if (query.from) range.$gte = new Date(`${query.from}T00:00:00`);
+          if (query.to) range.$lte = new Date(`${query.to}T23:59:59.999`);
+          filter.startedAt = range;
+        }
 
         const rows = await Session.find(filter)
           .select('deckId title joinCode state stats startedAt endedAt')
