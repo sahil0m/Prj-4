@@ -10,6 +10,10 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    // Fail rather than sliding to the next free port. The join URL and
+    // the QR code are built from a fixed origin, so a silent move to
+    // 5174 would serve the app somewhere nothing points at.
+    strictPort: true,
     // Listens on every interface so a phone on the same Wi-Fi can
     // reach it; localhost alone is unreachable from another device.
     host: true,

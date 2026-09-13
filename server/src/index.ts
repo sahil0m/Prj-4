@@ -38,7 +38,25 @@ async function main(): Promise<void> {
   server.keepAliveTimeout = 65_000;
   server.headersTimeout = 70_000;
 
-  await new Promise<void>((resolve) => {
+  await new Promise<void>((resolve, reject) => {
+    /*
+     * A listen failure arrives as an 'error' event, not a rejected call.
+     * Without this handler Node treats it as an unhandled 'error' and
+     * prints a stack trace about net.js internals -- which says nothing
+     * about the actual problem, which is nearly always a previous dev
+     * server that never shut down.
+     */
+    server.once('error', (err: NodeJS.ErrnoException) => {
+      if (err.code === 'EADDRINUSE') {
+        logger.error(
+          { port: env.PORT },
+          `Port ${String(env.PORT)} is already in use. Another server is still running -- stop it, then start again.`,
+        );
+        process.exit(1);
+      }
+      reject(err);
+    });
+
     server.listen(env.PORT, resolve);
   });
 
