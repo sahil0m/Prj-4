@@ -23,7 +23,8 @@ import { definitionFor, type SlideKind } from '@pulse/shared';
 import { usePresenter } from '../lib/presenter-store';
 import { Results } from '../components/Results';
 import { Leaderboard } from '../components/Leaderboard';
-import { ReactionLayer, QuestionButton, QuestionPanel } from '../components/LiveOverlay';
+import { ReactionLayer, QuestionButton, QuestionPanel, QaStage } from '../components/LiveOverlay';
+import { CompareSlide } from '../components/CompareSlide';
 import { Countdown } from '../components/Countdown';
 import { api, ApiError, type TextSummary } from '../lib/api';
 import { useAiAvailable } from '../components/AiPanel';
@@ -288,6 +289,18 @@ export function Presenter() {
             <div className={styles.results}>
               {slide?.kind === 'leaderboard' ? (
                 <Leaderboard entries={leaderboard} />
+              ) : slide?.kind === 'qa' ? (
+                /* The questions belong on the wall for this slide; the
+                   side panel is for reading them during other slides. */
+                <QaStage />
+              ) : slide?.kind === 'compare' ? (
+                <CompareSlide
+                  sessionId={session.id}
+                  slideIdA={stringOf(slide.config.slideIdA)}
+                  slideIdB={stringOf(slide.config.slideIdB)}
+                  labelA={stringOf(slide.config.labelA) || 'Before'}
+                  labelB={stringOf(slide.config.labelB) || 'After'}
+                />
               ) : currentSummary ? (
                 <SummaryView
                   summary={currentSummary}
@@ -624,6 +637,11 @@ async function toggleFullscreen(): Promise<void> {
 /** 123456 -> 123 456, which is easier to read aloud and to copy. */
 function formatCode(code: string): string {
   return `${code.slice(0, 3)} ${code.slice(3)}`;
+}
+
+/** Config values arrive as unknown; every use here wants a string. */
+function stringOf(value: unknown): string {
+  return typeof value === 'string' ? value : '';
 }
 
 function promptOf(slide: { config: Record<string, unknown> } | undefined): string {

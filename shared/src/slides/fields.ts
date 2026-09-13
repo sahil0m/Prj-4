@@ -11,7 +11,8 @@ import type { SlideKind } from './kinds.js';
  * limits in the form are the same numbers the server validates against.
  */
 
-export type FieldKind = 'text' | 'longtext' | 'number' | 'boolean' | 'select' | 'options' | 'url';
+export type FieldKind =
+  'text' | 'longtext' | 'number' | 'boolean' | 'select' | 'options' | 'url' | 'slideRef';
 
 export interface FieldSpec {
   /** The config key this field writes. */
@@ -24,6 +25,12 @@ export interface FieldSpec {
   max?: number;
   /** For 'select', the allowed values. */
   choices?: string[];
+  /**
+   * For 'slideRef', which slides may be chosen.
+   *
+   * 'answerable' excludes content slides, which have no results to show.
+   */
+  refScope?: 'answerable';
   /** Fields shared by every slide are grouped separately in the editor. */
   common: boolean;
 }
@@ -45,6 +52,17 @@ const COMMON: Record<string, { label: string; kind: FieldKind; hint?: string }> 
   participationOpen: { label: 'Open for answers', kind: 'boolean' },
   resultsHiddenByDefault: { label: 'Hide results until revealed', kind: 'boolean' },
   skipped: { label: 'Skip this slide', kind: 'boolean' },
+};
+
+/**
+ * Names humanise() cannot do anything sensible with.
+ *
+ * A trailing single letter becomes its own word -- labelA turns into
+ * "Label a" -- which reads as a typo rather than a label.
+ */
+const RENAMED: Record<string, string> = {
+  labelA: 'First label',
+  labelB: 'Second label',
 };
 
 /** Turns camelCase into a readable label: maxCharacters -> "Max characters". */
@@ -89,7 +107,7 @@ function specFor(name: string, schema: z.ZodTypeAny): FieldSpec | null {
   const inner = unwrap(schema);
   const common = name in COMMON;
   const meta = COMMON[name];
-  const label = meta?.label ?? humanise(name);
+  const label = meta?.label ?? RENAMED[name] ?? humanise(name);
 
   // The discriminator is structural, never editable.
   if (name === 'kind') return null;
@@ -122,6 +140,27 @@ function specFor(name: string, schema: z.ZodTypeAny): FieldSpec | null {
   }
 
   if (inner instanceof z.ZodString) {
+    /*
+     * A reference to another slide, not free text.
+     *
+     * Compare stores two slide ids. Rendered as a plain text box -- which
+     * is what a bare string schema produces -- it asked the author to type
+     * an id they have no way of knowing, so the slide could be added and
+     * configured but never actually made to show anything. The editor
+     * turns this into a picker.
+     */
+    if (name === 'slideIdA' || name === 'slideIdB') {
+      return {
+        name,
+        kind: 'slideRef',
+        // humanise() would produce "Slide id a", which reads as a typo.
+        label: name === 'slideIdA' ? 'First slide' : 'Second slide',
+        hint: 'Its results are shown on this slide.',
+        refScope: 'answerable',
+        common,
+      };
+    }
+
     return { name, kind: 'text', label, hint: meta?.hint, common };
   }
 

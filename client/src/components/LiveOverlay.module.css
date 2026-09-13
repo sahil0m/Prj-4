@@ -201,3 +201,148 @@
   text-transform: uppercase;
   color: var(--color-ink-subtle);
 }
+
+/* ------------------------------------------------------------------ */
+/* Q&A on the projector                                                */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Read from the back of a room, so this is a column of large cards rather
+ * than the dense list the side panel uses. Two columns once there is width
+ * for them, because a Q&A slide that scrolls is a Q&A slide nobody reads.
+ */
+.stage {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr));
+  align-content: start;
+  gap: clamp(10px, 1.4vh, 18px);
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  overflow-y: auto;
+}
+
+.stageCard {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  padding: clamp(14px, 1.8vh, 24px) clamp(52px, 4vw, 64px) clamp(14px, 1.8vh, 24px)
+    clamp(16px, 1.8vw, 26px);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--color-ink) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-ink) 10%, transparent);
+}
+
+.stageText {
+  margin: 0;
+  font-size: clamp(17px, 1.7vw, 27px);
+  font-weight: 600;
+  line-height: 1.35;
+  /* Someone will paste a paragraph. Wrapping beats overflowing. */
+  overflow-wrap: anywhere;
+}
+
+.stageAuthor {
+  font-size: clamp(12px, 1.1vw, 16px);
+  color: var(--color-ink-subtle);
+}
+
+.stageVotes {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  justify-self: start;
+  padding: 2px 9px 2px 5px;
+  border-radius: var(--radius-pill);
+  font-size: clamp(12px, 1.1vw, 16px);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 13%, transparent);
+}
+
+/* Top right, away from the text, so a presenter reaching for it while
+   reading does not cover the words they are reading. */
+.stageAnswered {
+  position: absolute;
+  top: clamp(10px, 1.2vh, 16px);
+  right: clamp(10px, 1vw, 16px);
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  color: var(--color-ink-subtle);
+  background: color-mix(in srgb, var(--color-ink) 8%, transparent);
+  transition:
+    color var(--duration-fast) var(--ease-standard),
+    background var(--duration-fast) var(--ease-standard);
+}
+
+.stageAnswered:hover {
+  color: var(--color-positive);
+  background: color-mix(in srgb, var(--color-positive) 16%, transparent);
+}
+
+.stageDone {
+  grid-column: 1 / -1;
+  margin: 0;
+  text-align: center;
+  font-size: clamp(12.5px, 1.1vw, 16px);
+  color: var(--color-ink-subtle);
+}
+
+.stageEmpty {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-lg);
+  padding: var(--space-4xl) 0;
+}
+
+.stageEmptyText {
+  margin: 0;
+  font-size: clamp(15px, 1.5vw, 22px);
+  color: var(--color-ink-subtle);
+}
+
+/* The same three dots the results view waits with, so "nothing yet" looks
+   the same wherever a room is waiting. */
+.waitingDots {
+  display: flex;
+  gap: 9px;
+}
+
+.waitingDots span {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  animation: bob 1.3s var(--ease-standard) infinite;
+}
+
+.waitingDots span:nth-child(2) {
+  animation-delay: 0.16s;
+}
+
+.waitingDots span:nth-child(3) {
+  animation-delay: 0.32s;
+}
+
+@keyframes bob {
+  0%,
+  60%,
+  100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-9px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .waitingDots span {
+    animation: none;
+  }
+}

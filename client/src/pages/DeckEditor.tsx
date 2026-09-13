@@ -168,6 +168,15 @@ export function DeckEditor() {
 
   const index = deck.slides.findIndex((s) => s.id === selectedId);
 
+  // For fields that point at another slide, which today means Compare.
+  const slideRefs = deck.slides.map((s, position) => ({
+    id: s.id,
+    kind: s.kind,
+    position,
+    prompt: typeof s.config.prompt === 'string' ? s.config.prompt : '',
+    answerable: definitionFor(s.kind).answerable,
+  }));
+
   return (
     <div className={styles.page}>
       <header className={styles.header}>
@@ -365,6 +374,8 @@ export function DeckEditor() {
                 <SlideForm
                   kind={slide.kind}
                   config={slide.config}
+                  slideId={slide.id}
+                  slides={slideRefs}
                   onChange={(patch) => {
                     updateSlideConfig(slide.id, patch);
                   }}

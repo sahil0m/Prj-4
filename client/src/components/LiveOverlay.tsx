@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { MessageSquare, X, Check } from 'lucide-react';
+import { MessageSquare, X, Check, ChevronUp } from 'lucide-react';
 import { usePresenter } from '../lib/presenter-store';
 import styles from './LiveOverlay.module.css';
 
@@ -178,5 +178,90 @@ export function QuestionPanel({ onClose }: { onClose: () => void }) {
         )}
       </div>
     </motion.aside>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Q&A on the projector                                                */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The questions, on the big screen.
+ *
+ * A Q&A slide previously rendered nothing: the questions existed, but only
+ * in the presenter's side panel, so the room watched a blank wall while
+ * people typed into it. That is the one slide kind whose entire purpose is
+ * to be read aloud together.
+ *
+ * Most upvoted first, because that is the room deciding what to ask, and
+ * answered questions drop to the bottom rather than vanishing -- someone
+ * who asked deserves to see that it was taken.
+ */
+export function QaStage() {
+  const questions = usePresenter((s) => s.questions);
+  const markAnswered = usePresenter((s) => s.markAnswered);
+
+  const waiting = [...questions].filter((q) => !q.answered).sort((a, b) => b.upvotes - a.upvotes);
+  const done = questions.filter((q) => q.answered);
+
+  if (questions.length === 0) {
+    return (
+      <div className={styles.stageEmpty}>
+        <div className={styles.waitingDots} aria-hidden="true">
+          <span />
+          <span />
+          <span />
+        </div>
+        <p className={styles.stageEmptyText}>Waiting for the first question</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.stage}>
+      <AnimatePresence initial={false}>
+        {waiting.map((question) => (
+          <motion.article
+            key={question.id}
+            className={styles.stageCard}
+            layout
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.96 }}
+            transition={{ layout: { type: 'spring', stiffness: 240, damping: 28 } }}
+          >
+            {question.upvotes > 0 && (
+              <span className={styles.stageVotes} title="Upvotes">
+                <ChevronUp size={18} />
+                {question.upvotes}
+              </span>
+            )}
+
+            <p className={styles.stageText}>{question.text}</p>
+
+            <span className={styles.stageAuthor}>{question.displayName || 'Anonymous'}</span>
+
+            {/* Marking one answered is a presenter action, but reaching for
+                the side panel mid-answer loses your place on the wall. */}
+            <button
+              type="button"
+              className={styles.stageAnswered}
+              onClick={() => {
+                markAnswered(question.id);
+              }}
+              aria-label="Mark answered"
+            >
+              <Check size={15} />
+            </button>
+          </motion.article>
+        ))}
+      </AnimatePresence>
+
+      {done.length > 0 && (
+        <p className={styles.stageDone}>
+          {done.length} answered {done.length === 1 ? 'question' : 'questions'}
+        </p>
+      )}
+    </div>
   );
 }

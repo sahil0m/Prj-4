@@ -1,4 +1,4 @@
-import type { SlideKind, SlideConfig } from '@pulse/shared';
+import type { SlideKind, SlideConfig, SlideResults } from '@pulse/shared';
 
 /**
  * The API client.
@@ -296,6 +296,15 @@ export const api = {
 
   endSession: (sessionId: string): Promise<{ session: LiveSession }> =>
     request(`/sessions/${sessionId}/end`, { method: 'POST' }),
+
+  /**
+   * One slide's results, for a slide that is not the current one.
+   *
+   * The socket pushes results for whatever is on screen; a Compare slide
+   * needs two other slides, so it asks for them directly.
+   */
+  slideResults: (sessionId: string, slideId: string): Promise<{ results: SlideResults }> =>
+    request(`/sessions/${sessionId}/slides/${slideId}/results`),
 
   /* ---------------- ai ---------------- */
 

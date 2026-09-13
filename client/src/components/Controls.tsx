@@ -134,12 +134,15 @@ export function Choice({
   options,
   label,
   id,
+  hint,
 }: {
   value: string;
   onChange: (value: string) => void;
   options: { value: string; label: string }[];
   label: string;
   id: string;
+  /** Shown under the control, for choices that need explaining. */
+  hint?: string;
 }) {
   return (
     <div className={styles.field}>
@@ -170,6 +173,8 @@ export function Choice({
           </Select.Content>
         </Select.Portal>
       </Select.Root>
+
+      {hint !== undefined && <p className={styles.hint}>{hint}</p>}
     </div>
   );
 }

@@ -103,6 +103,10 @@ function sampleValue(
       return field.min ?? field.max ?? 1;
     case 'select':
       return field.choices?.[0];
+    // A slide id. Any string is valid to the schema; the editor is what
+    // restricts it to slides that actually exist.
+    case 'slideRef':
+      return 'slide-1';
     case 'text':
     case 'longtext':
       return 'Sample text';
@@ -115,3 +119,46 @@ function sampleValue(
       return undefined;
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* Slide references                                                    */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Compare stores two slide ids. A bare string schema produces a plain text
+ * box, which asked the author to type an id they had no way of knowing --
+ * so the slide could be added and configured but never made to show
+ * anything. These pin the field kind that makes it a picker instead.
+ */
+describe('slide references', () => {
+  it('renders the compare targets as pickers, not text boxes', () => {
+    const fields = fieldsFor('compare');
+
+    for (const name of ['slideIdA', 'slideIdB']) {
+      const field = fields.find((f) => f.name === name);
+      expect(field, `${name} is missing from the compare form`).toBeDefined();
+      expect(field?.kind).toBe('slideRef');
+      expect(field?.refScope).toBe('answerable');
+    }
+  });
+
+  it('labels them readably', () => {
+    const labels = fieldsFor('compare').map((f) => f.label);
+
+    // humanise() turns slideIdA into "Slide id a" and labelA into
+    // "Label a", both of which read as typos on screen.
+    expect(labels).toContain('First slide');
+    expect(labels).toContain('Second slide');
+    expect(labels).toContain('First label');
+    expect(labels).toContain('Second label');
+    expect(labels.some((l) => /\bid a\b|\blabel a\b/i.test(l))).toBe(false);
+  });
+
+  it('is the only kind that uses a slide reference', () => {
+    // A picker needs the deck passed to the form. If another kind starts
+    // using one, whoever adds it has to thread that through too.
+    const using = SLIDE_KINDS.filter((kind) => fieldsFor(kind).some((f) => f.kind === 'slideRef'));
+
+    expect(using).toEqual(['compare']);
+  });
+});
