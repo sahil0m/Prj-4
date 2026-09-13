@@ -1,0 +1,324 @@
+/*
+ * The date range control.
+ *
+ * The library ships structure and keyboard behaviour; everything visual
+ * here is ours, driven by the same tokens as the rest of the product so
+ * the calendar does not look like a widget someone dropped in.
+ */
+
+/* ------------------------------------------------------------------ */
+/* Trigger                                                             */
+/* ------------------------------------------------------------------ */
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 10px 0 12px;
+  border-radius: var(--radius-md);
+  font-size: 13.5px;
+  font-weight: 600;
+  font-family: inherit;
+  color: var(--color-ink-muted);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  transition:
+    color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    background var(--duration-fast) var(--ease-standard);
+}
+
+.trigger:hover {
+  color: var(--color-ink);
+  border-color: color-mix(in srgb, var(--color-ink) 22%, transparent);
+}
+
+/* A chosen range is a filter that is hiding things, so it says so. */
+.trigger[data-chosen='true'] {
+  color: var(--color-accent);
+  border-color: color-mix(in srgb, var(--color-accent) 45%, transparent);
+  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+}
+
+.trigger:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.triggerLabel {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.clear {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  color: inherit;
+  opacity: 0.7;
+  cursor: pointer;
+  transition:
+    opacity var(--duration-fast) var(--ease-standard),
+    background var(--duration-fast) var(--ease-standard);
+}
+
+.clear:hover {
+  opacity: 1;
+  background: color-mix(in srgb, var(--color-accent) 22%, transparent);
+}
+
+/* ------------------------------------------------------------------ */
+/* Panel                                                               */
+/* ------------------------------------------------------------------ */
+
+.panel {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas:
+    'presets calendar'
+    'footer  footer';
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--glass-shadow);
+  /* Above the page, below a modal. */
+  z-index: 60;
+  overflow: hidden;
+  animation: rise var(--duration-fast) var(--ease-standard);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel {
+    animation: none;
+  }
+}
+
+.presets {
+  grid-area: presets;
+  display: grid;
+  align-content: start;
+  gap: 2px;
+  padding: var(--space-sm);
+  border-right: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-ink) 3%, transparent);
+}
+
+.preset {
+  padding: 8px 14px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  text-align: left;
+  white-space: nowrap;
+  color: var(--color-ink-muted);
+  transition:
+    color var(--duration-fast) var(--ease-standard),
+    background var(--duration-fast) var(--ease-standard);
+}
+
+.preset:hover {
+  color: var(--color-ink);
+  background: color-mix(in srgb, var(--color-ink) 8%, transparent);
+}
+
+.preset[data-active='true'] {
+  color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 13%, transparent);
+}
+
+.preset:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.calendar {
+  grid-area: calendar;
+  padding: var(--space-sm) var(--space-md);
+}
+
+.footer {
+  grid-area: footer;
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border-top: 1px solid var(--color-border);
+}
+
+.footerClear,
+.done {
+  min-height: 34px;
+  padding: 0 var(--space-md);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  transition:
+    color var(--duration-fast) var(--ease-standard),
+    background var(--duration-fast) var(--ease-standard);
+}
+
+.footerClear {
+  color: var(--color-ink-subtle);
+}
+
+.footerClear:hover:not(:disabled) {
+  color: var(--color-ink);
+  background: color-mix(in srgb, var(--color-ink) 8%, transparent);
+}
+
+.footerClear:disabled {
+  opacity: 0.4;
+}
+
+.done {
+  color: var(--color-on-accent);
+  background: var(--color-accent);
+}
+
+.done:hover {
+  background: color-mix(in srgb, var(--color-accent) 88%, var(--color-ink));
+}
+
+/* On a narrow window the presets become a scrolling row above the
+   calendar rather than a column that squeezes it. */
+@media (max-width: 720px) {
+  .panel {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      'presets'
+      'calendar'
+      'footer';
+  }
+
+  .presets {
+    grid-auto-flow: column;
+    justify-content: start;
+    border-right: none;
+    border-bottom: 1px solid var(--color-border);
+    overflow-x: auto;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* The calendar itself                                                 */
+/* ------------------------------------------------------------------ */
+
+/*
+ * react-day-picker exposes its whole look as custom properties, so this is
+ * a theme rather than a pile of overrides fighting the library's own rules.
+ *
+ * That distinction matters here: the range ends are drawn as a gradient
+ * that fades the band out under the capping day, and a single-day range
+ * reverts it entirely. Replacing those backgrounds with flat colour --
+ * the obvious thing to do -- quietly breaks both.
+ */
+.calendar :global(.rdp-root) {
+  --rdp-accent-color: var(--color-accent);
+  --rdp-accent-background-color: color-mix(in srgb, var(--color-accent) 15%, transparent);
+
+  --rdp-day-height: 40px;
+  --rdp-day-width: 40px;
+  --rdp-day_button-height: 36px;
+  --rdp-day_button-width: 36px;
+  --rdp-day_button-border: none;
+  --rdp-day_button-border-radius: var(--radius-md);
+
+  --rdp-range_middle-color: var(--color-ink);
+  --rdp-range_start-color: var(--color-on-accent);
+  --rdp-range_end-color: var(--color-on-accent);
+
+  --rdp-nav_button-height: 30px;
+  --rdp-nav_button-width: 30px;
+  --rdp-nav-height: 34px;
+
+  --rdp-months-gap: var(--space-lg);
+  --rdp-today-color: var(--color-accent);
+  --rdp-outside-opacity: 0.32;
+  --rdp-disabled-opacity: 0.26;
+  --rdp-weekday-opacity: 1;
+  --rdp-weekday-text-transform: none;
+  --rdp-selected-border: none;
+
+  font-family: inherit;
+  font-size: 13.5px;
+  color: var(--color-ink);
+}
+
+.calendar :global(.rdp-month_caption) {
+  padding-left: 2px;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.calendar :global(.rdp-weekday) {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--color-ink-subtle);
+}
+
+.calendar :global(.rdp-day) {
+  font-variant-numeric: tabular-nums;
+}
+
+.calendar :global(.rdp-day_button) {
+  font-family: inherit;
+  font-size: inherit;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+}
+
+/* Hover only where it means something: an already-selected day and a
+   disabled one both ignore the pointer. */
+.calendar :global(.rdp-day:not(.rdp-selected, [aria-disabled='true']) .rdp-day_button:hover) {
+  background-color: color-mix(in srgb, var(--color-ink) 10%, transparent);
+}
+
+.calendar :global(.rdp-day_button:focus-visible) {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.calendar :global(.rdp-today:not(.rdp-selected) .rdp-day_button) {
+  font-weight: 700;
+  color: var(--color-accent);
+}
+
+.calendar :global(.rdp-selected .rdp-day_button) {
+  font-weight: 650;
+}
+
+.calendar :global(.rdp-nav button) {
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: var(--radius-md);
+  color: var(--color-ink-muted);
+  background: transparent;
+  transition:
+    color var(--duration-fast) var(--ease-standard),
+    background var(--duration-fast) var(--ease-standard);
+}
+
+.calendar :global(.rdp-nav button:hover:not(:disabled)) {
+  color: var(--color-ink);
+  background: color-mix(in srgb, var(--color-ink) 9%, transparent);
+}
+
+.calendar :global(.rdp-nav button:focus-visible) {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}

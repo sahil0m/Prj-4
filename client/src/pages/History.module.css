@@ -256,58 +256,14 @@
 /* Date range                                                          */
 /* ------------------------------------------------------------------ */
 
-/*
- * Pushed to the right of the title on a wide screen and wrapping under it
- * on a narrow one, so the heading never gets squeezed to two words.
- */
+/* Pushed to the right of the title, wrapping under it when there is not
+   room, so the heading never gets squeezed to two words. */
 .filters {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
+  align-items: center;
   gap: var(--space-sm);
   margin-left: auto;
-}
-
-.filter {
-  display: grid;
-  gap: 3px;
-}
-
-.filterLabel {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--color-ink-subtle);
-}
-
-.date {
-  min-height: 38px;
-  padding: 0 var(--space-sm);
-  border-radius: var(--radius-md);
-  font-size: 13.5px;
-  font-family: inherit;
-  color: var(--color-ink);
-  background: var(--color-surface-raised);
-  border: 1px solid var(--color-border);
-  /* Safari shrinks an empty date input to its placeholder otherwise, so
-     the two fields end up different widths. */
-  min-width: 148px;
-}
-
-.date:focus-visible {
-  outline: none;
-  box-shadow: var(--focus-ring);
-}
-
-/* The calendar button is near-invisible on a dark ground otherwise. */
-.date::-webkit-calendar-picker-indicator {
-  opacity: 0.55;
-  cursor: pointer;
-}
-
-.date::-webkit-calendar-picker-indicator:hover {
-  opacity: 1;
 }
 
 .clear {

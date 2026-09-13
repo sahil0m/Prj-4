@@ -15,6 +15,7 @@ import {
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { api, type PastSession } from '../lib/api';
 import styles from './History.module.css';
+import { DateRangePicker } from '../components/DateRangePicker';
 
 /**
  * Every session this account has run.
@@ -83,46 +84,13 @@ export function History() {
         <h1 className={styles.title}>Past sessions</h1>
 
         <div className={styles.filters}>
-          <label className={styles.filter}>
-            <span className={styles.filterLabel}>From</span>
-            <input
-              type="date"
-              className={styles.date}
-              value={from}
-              // Cannot start after it ends; the browser enforces it rather
-              // than the page having to explain an empty result.
-              max={to || undefined}
-              onChange={(event) => {
-                setFrom(event.target.value);
-              }}
-            />
-          </label>
-
-          <label className={styles.filter}>
-            <span className={styles.filterLabel}>To</span>
-            <input
-              type="date"
-              className={styles.date}
-              value={to}
-              min={from || undefined}
-              onChange={(event) => {
-                setTo(event.target.value);
-              }}
-            />
-          </label>
-
-          {filtered && (
-            <button
-              type="button"
-              className={styles.clear}
-              onClick={() => {
-                setFrom('');
-                setTo('');
-              }}
-            >
-              Clear
-            </button>
-          )}
+          <DateRangePicker
+            value={{ from, to }}
+            onChange={(next) => {
+              setFrom(next.from);
+              setTo(next.to);
+            }}
+          />
         </div>
       </header>
 

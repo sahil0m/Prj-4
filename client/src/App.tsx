@@ -1,14 +1,29 @@
-import { useEffect } from 'react';
+import { useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { useAuth } from './lib/auth-store';
 import { SignIn } from './pages/SignIn';
 import { Dashboard } from './pages/Dashboard';
-import { DeckEditor } from './pages/DeckEditor';
-import { Presenter } from './pages/Presenter';
-import { Admin } from './pages/Admin';
-import { Settings } from './pages/Settings';
-import { History } from './pages/History';
+
+/*
+ * Everything past the dashboard is fetched when it is first opened.
+ *
+ * The whole app used to arrive as one file, so reaching the sign-in page
+ * meant downloading the deck editor, the presenter view, the admin portal
+ * and a calendar -- most of which a given person never opens, and none of
+ * which is needed to type a password.
+ *
+ * Sign-in and the dashboard stay in the main bundle because they are the
+ * first thing almost everyone sees, and a spinner on the first screen
+ * would be a worse trade than the bytes.
+ */
+const DeckEditor = lazy(() =>
+  import('./pages/DeckEditor').then((m) => ({ default: m.DeckEditor })),
+);
+const Presenter = lazy(() => import('./pages/Presenter').then((m) => ({ default: m.Presenter })));
+const Admin = lazy(() => import('./pages/Admin').then((m) => ({ default: m.Admin })));
+const Settings = lazy(() => import('./pages/Settings').then((m) => ({ default: m.Settings })));
+const History = lazy(() => import('./pages/History').then((m) => ({ default: m.History })));
 import { Splash } from './components/Splash';
 import { TooltipProvider } from './components/Controls';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -31,50 +46,54 @@ function Shell() {
   if (status === 'checking') return <Splash />;
 
   return (
-    <Routes>
-      <Route
-        path="/signin"
-        element={status === 'authenticated' ? <Navigate to="/" replace /> : <SignIn />}
-      />
+    /* The same splash the session check uses, so a page that arrives over
+       a slow connection looks like loading rather than like nothing. */
+    <Suspense fallback={<Splash />}>
+      <Routes>
+        <Route
+          path="/signin"
+          element={status === 'authenticated' ? <Navigate to="/" replace /> : <SignIn />}
+        />
 
-      {/* Where the Google callback lands. The refresh cookie is already set,
+        {/* Where the Google callback lands. The refresh cookie is already set,
           so all this page does is pick the session up and move on. */}
-      <Route path="/auth/complete" element={<OAuthComplete />} />
+        <Route path="/auth/complete" element={<OAuthComplete />} />
 
-      <Route
-        path="/"
-        element={status === 'authenticated' ? <Dashboard /> : <Navigate to="/signin" replace />}
-      />
+        <Route
+          path="/"
+          element={status === 'authenticated' ? <Dashboard /> : <Navigate to="/signin" replace />}
+        />
 
-      <Route
-        path="/decks/:deckId"
-        element={status === 'authenticated' ? <DeckEditor /> : <Navigate to="/signin" replace />}
-      />
+        <Route
+          path="/decks/:deckId"
+          element={status === 'authenticated' ? <DeckEditor /> : <Navigate to="/signin" replace />}
+        />
 
-      <Route
-        path="/present/:sessionId"
-        element={status === 'authenticated' ? <Presenter /> : <Navigate to="/signin" replace />}
-      />
+        <Route
+          path="/present/:sessionId"
+          element={status === 'authenticated' ? <Presenter /> : <Navigate to="/signin" replace />}
+        />
 
-      {/* Guarded on the server too: this route only hides the link, it is
+        {/* Guarded on the server too: this route only hides the link, it is
           not what keeps a non-admin out. */}
-      <Route
-        path="/admin"
-        element={status === 'authenticated' ? <Admin /> : <Navigate to="/signin" replace />}
-      />
+        <Route
+          path="/admin"
+          element={status === 'authenticated' ? <Admin /> : <Navigate to="/signin" replace />}
+        />
 
-      <Route
-        path="/settings"
-        element={status === 'authenticated' ? <Settings /> : <Navigate to="/signin" replace />}
-      />
+        <Route
+          path="/settings"
+          element={status === 'authenticated' ? <Settings /> : <Navigate to="/signin" replace />}
+        />
 
-      <Route
-        path="/history"
-        element={status === 'authenticated' ? <History /> : <Navigate to="/signin" replace />}
-      />
+        <Route
+          path="/history"
+          element={status === 'authenticated' ? <History /> : <Navigate to="/signin" replace />}
+        />
 
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Suspense>
   );
 }
 
