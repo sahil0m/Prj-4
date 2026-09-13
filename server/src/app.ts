@@ -4,7 +4,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import { ZodError } from 'zod';
-import { allowedOrigins, isProduction } from './config.js';
+import { isAllowedOrigin, isProduction } from './config.js';
 import { logger } from './lib/logger.js';
 import { MulterError } from 'multer';
 import { AiError } from './services/ai/providers.js';
@@ -59,7 +59,7 @@ export function createApp(): Express {
     cors({
       origin(origin, callback) {
         // Same-origin requests and server-to-server calls carry no Origin.
-        if (!origin || allowedOrigins.includes(origin)) {
+        if (!origin || isAllowedOrigin(origin)) {
           callback(null, true);
           return;
         }

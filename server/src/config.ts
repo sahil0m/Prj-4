@@ -100,3 +100,38 @@ export const isTest = env.NODE_ENV === 'test';
 
 /** Origins allowed to call the API from a browser. */
 export const allowedOrigins = [env.CLIENT_ORIGIN, env.JOIN_ORIGIN];
+
+/**
+ * Whether a browser origin may call the API.
+ *
+ * In production this is exactly the two configured origins and nothing
+ * else. In development it also accepts the machine's own address on the
+ * local network, because that is how a phone reaches the join app: the
+ * laptop serves it on 192.168.x.x, the browser treats that as the page's
+ * origin, and the dev proxy passes it through unchanged. Without this a
+ * phone is refused every request while the laptop works fine, which looks
+ * like a broken session rather than a CORS rule.
+ *
+ * The allowance is deliberately narrow -- loopback and the three private
+ * ranges only, never a public host -- and disappears entirely in
+ * production, where a phone reaches a real hostname anyway.
+ */
+export function isAllowedOrigin(origin: string): boolean {
+  if (allowedOrigins.includes(origin)) return true;
+  if (isProduction) return false;
+
+  let host: string;
+  try {
+    host = new URL(origin).hostname;
+  } catch {
+    return false;
+  }
+
+  if (host === 'localhost' || host === '127.0.0.1' || host === '::1') return true;
+
+  // 10.0.0.0/8, 172.16.0.0/12 and 192.168.0.0/16: the addresses a home or
+  // office router hands out, and nothing routable from the internet.
+  return (
+    host.startsWith('10.') || host.startsWith('192.168.') || /^172\.(1[6-9]|2\d|3[01])\./.test(host)
+  );
+}

@@ -1,7 +1,7 @@
 import type { Server as HttpServer } from 'node:http';
 import { Server, type Socket } from 'socket.io';
 import { Types } from 'mongoose';
-import { env, isProduction } from '../config.js';
+import { isProduction, isAllowedOrigin } from '../config.js';
 import { logger } from '../lib/logger.js';
 import { verifyAccessToken } from '../lib/tokens.js';
 import { Session, User, AudienceQuestion, Response } from '../models/index.js';
@@ -105,7 +105,12 @@ export function attachRealtime(
     httpServer,
     {
       cors: {
-        origin: [env.CLIENT_ORIGIN, env.JOIN_ORIGIN],
+        // Same rule as the REST API, so a phone that can load the join
+        // app can also open its socket.
+        origin: (origin, callback) => {
+          if (!origin || isAllowedOrigin(origin)) callback(null, true);
+          else callback(new Error('Origin not allowed'));
+        },
         credentials: true,
       },
       // A phone on mobile data drops often; this keeps a reconnect cheap.
