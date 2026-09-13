@@ -1,0 +1,38 @@
+/* Centred and plain. Whatever failed, this has to render. */
+
+.wrap {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--space-md);
+  min-height: 100dvh;
+  padding: var(--space-xl);
+  text-align: center;
+}
+
+.title {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.body {
+  margin: 0;
+  max-width: 30ch;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--color-ink-muted);
+}
+
+.button {
+  /* Full width and tall: pressed by someone who is already annoyed, in a
+     dark room, probably one-handed. */
+  width: 100%;
+  max-width: 320px;
+  min-height: 52px;
+  border-radius: var(--radius-md);
+  font-size: 16px;
+  font-weight: 650;
+  color: var(--color-on-accent);
+  background: var(--color-accent);
+}

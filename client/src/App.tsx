@@ -11,6 +11,7 @@ import { Settings } from './pages/Settings';
 import { History } from './pages/History';
 import { Splash } from './components/Splash';
 import { TooltipProvider } from './components/Controls';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 /**
  * Restores the session once on load, then routes.
@@ -98,7 +99,11 @@ export function App() {
     <BrowserRouter>
       {/* One provider for the whole app, so individual tooltips need none. */}
       <TooltipProvider>
-        <Shell />
+        {/* Inside the router, so the fallback can tell a live session from
+            any other screen and offer the right way out. */}
+        <ErrorBoundary>
+          <Shell />
+        </ErrorBoundary>
       </TooltipProvider>
       <Toaster
         position="bottom-right"

@@ -1,0 +1,137 @@
+/*
+ * A calm screen for a bad moment.
+ *
+ * Deliberately not alarming: red everywhere would make a recoverable
+ * hiccup look like lost work, and the first thing this has to do is say
+ * that nothing is lost.
+ */
+
+.wrap {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: var(--space-lg);
+  background: var(--color-canvas);
+}
+
+.card {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-md);
+  width: 100%;
+  max-width: 460px;
+  padding: var(--space-2xl) var(--space-xl);
+  text-align: center;
+  border-radius: var(--radius-xl);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--glass-shadow);
+}
+
+.icon {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  color: var(--color-caution);
+  background: color-mix(in srgb, var(--color-caution) 14%, transparent);
+}
+
+.title {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.body {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--color-ink-muted);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-sm);
+  margin-top: var(--space-xs);
+}
+
+.primary,
+.secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 42px;
+  padding: 0 var(--space-lg);
+  border-radius: var(--radius-md);
+  font-size: 14.5px;
+  font-weight: 600;
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+}
+
+.primary {
+  color: var(--color-on-accent);
+  background: var(--color-accent);
+}
+
+.primary:hover {
+  background: color-mix(in srgb, var(--color-accent) 88%, var(--color-ink));
+}
+
+.secondary {
+  color: var(--color-ink-muted);
+  background: color-mix(in srgb, var(--color-ink) 8%, transparent);
+}
+
+.secondary:hover {
+  color: var(--color-ink);
+  background: color-mix(in srgb, var(--color-ink) 13%, transparent);
+}
+
+.details {
+  width: 100%;
+  margin-top: var(--space-xs);
+  text-align: left;
+}
+
+.summary {
+  font-size: 12.5px;
+  color: var(--color-ink-subtle);
+  cursor: pointer;
+  list-style: none;
+}
+
+.summary::-webkit-details-marker {
+  display: none;
+}
+
+.summary::before {
+  content: '▸ ';
+}
+
+.details[open] .summary::before {
+  content: '▾ ';
+}
+
+.trace {
+  margin: var(--space-sm) 0 0;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-ink-muted);
+  background: color-mix(in srgb, var(--color-ink) 6%, transparent);
+  /* A long message must not stretch the card past the viewport. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 160px;
+  overflow-y: auto;
+}
