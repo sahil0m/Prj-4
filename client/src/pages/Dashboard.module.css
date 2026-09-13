@@ -510,3 +510,60 @@
     display: none;
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* Archived                                                            */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Put away, not thrown away. An archived deck is dimmed rather than
+ * hidden or restyled, so it is clearly the same deck in a quieter state.
+ */
+.card[data-archived='true'] {
+  opacity: 0.62;
+}
+
+.card[data-archived='true']:hover,
+.card[data-archived='true']:focus-within {
+  opacity: 1;
+}
+
+.archived {
+  margin-top: var(--space-2xl);
+}
+
+.archivedToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-md);
+  padding: 6px 10px 6px 6px;
+  border-radius: var(--radius-md);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-ink-subtle);
+  transition:
+    color var(--duration-fast) var(--ease-standard),
+    background var(--duration-fast) var(--ease-standard);
+}
+
+.archivedToggle:hover {
+  color: var(--color-ink);
+  background: color-mix(in srgb, var(--color-ink) 7%, transparent);
+}
+
+.archivedChevron {
+  transition: transform var(--duration-fast) var(--ease-standard);
+}
+
+.archivedChevron[data-open='false'] {
+  transform: rotate(-90deg);
+}
+
+.archivedCount {
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  background: color-mix(in srgb, var(--color-ink) 10%, transparent);
+}

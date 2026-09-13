@@ -18,6 +18,8 @@ import {
   Search,
   Shield,
   History as HistoryIcon,
+  Archive,
+  ArchiveRestore,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../lib/auth-store';
@@ -40,9 +42,18 @@ export function Dashboard() {
   const [aiOpen, setAiOpen] = useState(false);
   const aiAvailable = useAiAvailable();
 
+  /*
+   * Whether to show archived decks.
+   *
+   * Archiving existed end to end -- a route, a service, a filter, an API
+   * method -- and nothing ever called it, so a deck could never be put
+   * away and an archived one would have been invisible with no way back.
+   */
+  const [showArchived, setShowArchived] = useState(false);
+
   const refresh = useCallback(async () => {
     try {
-      const { decks: list } = await api.listDecks();
+      const { decks: list } = await api.listDecks({ includeArchived: true });
       setDecks(list);
       setListError(null);
     } catch (err) {
@@ -55,6 +66,13 @@ export function Dashboard() {
     void refresh();
   }, [refresh]);
 
+  /*
+   * Split rather than filtered at the source: the list is fetched once
+   * including archived, so toggling the section costs no request.
+   */
+  const active = decks?.filter((deck) => !deck.archived) ?? [];
+  const archived = decks?.filter((deck) => deck.archived) ?? [];
+
   const createDeck = async () => {
     if (creating) return;
     setCreating(true);
@@ -64,6 +82,18 @@ export function Dashboard() {
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : 'That deck could not be created.');
       setCreating(false);
+    }
+  };
+
+  const setArchived = async (id: string, archived: boolean) => {
+    try {
+      await api.archiveDeck(id, archived);
+      await refresh();
+      toast.success(archived ? 'Deck archived' : 'Deck restored');
+    } catch {
+      toast.error(
+        archived ? 'That deck could not be archived.' : 'That deck could not be restored.',
+      );
     }
   };
 
@@ -285,7 +315,7 @@ export function Dashboard() {
                 <div key={i} className={`skeleton ${styles.cardSkeleton}`} />
               ))}
             </div>
-          ) : decks.length === 0 ? (
+          ) : active.length === 0 && archived.length === 0 ? (
             <div className={`glass ${styles.empty}`}>
               <span className={styles.emptyMark} aria-hidden="true">
                 <Radio size={26} />
@@ -317,23 +347,76 @@ export function Dashboard() {
               </button>
             </div>
           ) : (
-            <div className={styles.grid}>
-              {decks.map((deck) => (
-                <DeckCard
-                  key={deck.id}
-                  deck={deck}
-                  onOpen={() => {
-                    void navigate(`/decks/${deck.id}`);
-                  }}
-                  onDuplicate={() => {
-                    void duplicateDeck(deck.id);
-                  }}
-                  onDelete={() => {
-                    void deleteDeck(deck.id, deck.title);
-                  }}
-                />
-              ))}
-            </div>
+            <>
+              <div className={styles.grid}>
+                {active.map((deck) => (
+                  <DeckCard
+                    key={deck.id}
+                    deck={deck}
+                    onOpen={() => {
+                      void navigate(`/decks/${deck.id}`);
+                    }}
+                    onDuplicate={() => {
+                      void duplicateDeck(deck.id);
+                    }}
+                    onDelete={() => {
+                      void deleteDeck(deck.id, deck.title);
+                    }}
+                    onArchive={() => {
+                      void setArchived(deck.id, true);
+                    }}
+                  />
+                ))}
+              </div>
+
+              {/* Collapsed by default. Archived decks are the ones someone
+                  decided to stop looking at, so they should not take up
+                  the top of the screen -- but they must be reachable, or
+                  archiving is indistinguishable from deleting. */}
+              {archived.length > 0 && (
+                <section className={styles.archived}>
+                  <button
+                    type="button"
+                    className={styles.archivedToggle}
+                    onClick={() => {
+                      setShowArchived((current) => !current);
+                    }}
+                    aria-expanded={showArchived}
+                  >
+                    <ChevronDown
+                      size={15}
+                      className={styles.archivedChevron}
+                      data-open={showArchived}
+                    />
+                    Archived
+                    <span className={styles.archivedCount}>{archived.length}</span>
+                  </button>
+
+                  {showArchived && (
+                    <div className={styles.grid}>
+                      {archived.map((deck) => (
+                        <DeckCard
+                          key={deck.id}
+                          deck={deck}
+                          onOpen={() => {
+                            void navigate(`/decks/${deck.id}`);
+                          }}
+                          onDuplicate={() => {
+                            void duplicateDeck(deck.id);
+                          }}
+                          onDelete={() => {
+                            void deleteDeck(deck.id, deck.title);
+                          }}
+                          onRestore={() => {
+                            void setArchived(deck.id, false);
+                          }}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </section>
+              )}
+            </>
           )}
         </motion.div>
       </main>
@@ -368,14 +451,20 @@ function DeckCard({
   onOpen,
   onDuplicate,
   onDelete,
+  onArchive,
+  onRestore,
 }: {
   deck: DeckSummary;
   onOpen: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
+  /** Given for a live deck. */
+  onArchive?: () => void;
+  /** Given for an archived one. Exactly one of the two is ever present. */
+  onRestore?: () => void;
 }) {
   return (
-    <article className={styles.card}>
+    <article className={styles.card} data-archived={deck.archived}>
       {/* The whole card opens the deck; the menu sits above it so its own
           clicks do not fall through to this button. */}
       <button type="button" className={styles.cardOpen} onClick={onOpen}>
@@ -416,6 +505,20 @@ function DeckCard({
               <Copy size={14} />
               Duplicate
             </DropdownMenu.Item>
+
+            {onArchive && (
+              <DropdownMenu.Item className={styles.menuItem} onSelect={onArchive}>
+                <Archive size={14} />
+                Archive
+              </DropdownMenu.Item>
+            )}
+
+            {onRestore && (
+              <DropdownMenu.Item className={styles.menuItem} onSelect={onRestore}>
+                <ArchiveRestore size={14} />
+                Restore
+              </DropdownMenu.Item>
+            )}
             <DropdownMenu.Item
               className={`${styles.menuItem} ${styles.menuItemDanger}`}
               onSelect={onDelete}
