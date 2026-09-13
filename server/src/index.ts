@@ -5,6 +5,7 @@ import { connectDb, disconnectDb } from './lib/db.js';
 import { createApp } from './app.js';
 import { attachRealtime } from './realtime/gateway.js';
 import { startCleanup } from './jobs/cleanup.js';
+import { resolveJoinOrigin } from './lib/network.js';
 
 /**
  * Process entry point.
@@ -64,6 +65,10 @@ async function main(): Promise<void> {
     { port: env.PORT, env: env.NODE_ENV, pid: process.pid },
     `Server listening on http://localhost:${String(env.PORT)}`,
   );
+
+  // After listening, so a slow routing lookup never delays startup, and
+  // before any session can be created, which is what needs the answer.
+  await resolveJoinOrigin();
 
   /* ---------------- graceful shutdown ---------------- */
 

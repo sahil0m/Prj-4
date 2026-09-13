@@ -1,11 +1,11 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import type { Types } from 'mongoose';
-import { env } from '../config.js';
 import { Session, Participant, Response } from '../models/index.js';
 import { requireAuth, type AuthedRequest } from '../middleware/requireAuth.js';
 import * as sessions from '../services/sessions.js';
 import * as exports from '../services/export.js';
+import { joinOrigin } from '../lib/network.js';
 
 /**
  * Session lifecycle over HTTP.
@@ -249,8 +249,8 @@ function toPublicSession(session: Awaited<ReturnType<typeof sessions.startSessio
     // The deck's theme travels with the session, so the presenter view
     // shows the accent the author chose rather than the default.
     theme: sessions.snapshotOf(session).theme,
-    joinUrl: env.JOIN_ORIGIN,
-    joinLink: `${env.JOIN_ORIGIN}/?code=${session.joinCode}`,
+    joinUrl: joinOrigin(),
+    joinLink: `${joinOrigin()}/?code=${session.joinCode}`,
     state: session.state,
     mode: session.mode,
     currentSlideId: session.currentSlideId ?? null,
