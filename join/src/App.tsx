@@ -8,6 +8,7 @@ import {
 } from './lib/session';
 import { AnswerInput } from './components/AnswerInput';
 import { ActionBar } from './components/ActionBar';
+import { Pacer } from './components/Pacer';
 import { CountdownBar } from './components/Countdown';
 import styles from './App.module.css';
 
@@ -264,6 +265,10 @@ export function App() {
       {collectNames && name !== '' && (
         <footer className={styles.footer}>Answering as {name}</footer>
       )}
+
+      {/* Above the action bar, and outside <main>, so it stays put when the
+          question is replaced by the confirmation screen. */}
+      {slide && connection.current && <Pacer slide={slide} connection={connection.current} />}
 
       {connection.current && (
         <ActionBar

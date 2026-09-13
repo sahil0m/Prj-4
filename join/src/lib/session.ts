@@ -349,6 +349,31 @@ export class SessionConnection {
     });
   }
 
+  /**
+   * Steps through the deck, in an audience-paced session.
+   *
+   * The new slide arrives as a normal `slide:show` to this socket alone,
+   * so nothing here needs to touch the rendered slide: the same path that
+   * handles a presenter advancing the room handles this too.
+   */
+  move(direction: 'next' | 'previous'): Promise<AckResult> {
+    return new Promise((resolve) => {
+      if (!this.socket?.connected) {
+        resolve({ ok: false, code: 'offline', message: 'No connection.' });
+        return;
+      }
+
+      const timer = setTimeout(() => {
+        resolve({ ok: false, code: 'timeout', message: 'The network is slow.' });
+      }, 8000);
+
+      this.socket.emit('participant:move', { direction }, (result) => {
+        clearTimeout(timer);
+        resolve(result);
+      });
+    });
+  }
+
   question(text: string): Promise<AckResult> {
     return new Promise((resolve) => {
       if (!this.socket?.connected) {
