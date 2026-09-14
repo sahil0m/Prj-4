@@ -221,13 +221,28 @@ async function main() {
     assert(old.revokedReason === 'rotated', `unexpected reason: ${String(old.revokedReason)}`);
   });
 
-  await check('reusing a spent refresh token is refused', () =>
-    expectFailure(
+  await check('reusing a spent refresh token is refused', async () => {
+    const { hashRefreshToken } = await import('../lib/tokens.js');
+
+    /*
+     * Aged past the grace window first.
+     *
+     * A token presented again within seconds of its rotation is treated as
+     * one browser sending the same cookie twice, not as theft. A thief's
+     * replay arrives later than that, which is what this drives.
+     */
+    await db
+      .update(refreshTokens)
+      .set({ usedAt: new Date(Date.now() - 60_000), revokedAt: new Date(Date.now() - 60_000) })
+      .where(eq(refreshTokens.tokenHash, hashRefreshToken(first.session.refreshToken)));
+    auth.authInternals.forgetRotations();
+
+    await expectFailure(
       () => auth.refresh(first.session.refreshToken, DEVICE),
       'token_reuse_detected',
       'replaying a used token',
-    ),
-  );
+    );
+  });
 
   await check('reuse revokes the entire token family, not just one token', async () => {
     // The attacker replayed the old token above. The legitimate user's
@@ -595,7 +610,13 @@ async function main() {
    * another, because a race never shows up in a test that waits its turn.
    */
 
-  await check('the same refresh token presented at once is honoured exactly once', async () => {
+  await check('the same refresh token sent several times at once keeps the session', async () => {
+    /*
+     * The failure this guards is the one that shipped: a browser can send
+     * the same refresh cookie twice at once -- two tabs, or a page restore
+     * racing a retry -- and treating the duplicate as theft signed people
+     * out of a session they were actively using.
+     */
     const racer = await auth.register(
       { email: `race-refresh-${stamp}@example.test`, password: PASSWORD, name: 'Racer' },
       DEVICE,
@@ -603,15 +624,64 @@ async function main() {
     createdUserIds.push(racer.user.id);
 
     const results = await Promise.allSettled(
-      Array.from({ length: 5 }, () => auth.refresh(racer.session.refreshToken, DEVICE)),
+      Array.from({ length: 6 }, () => auth.refresh(racer.session.refreshToken, DEVICE)),
     );
 
-    const succeeded = results.filter((r) => r.status === 'fulfilled').length;
-    assert(succeeded === 1, `${String(succeeded)} of 5 simultaneous refreshes succeeded`);
+    const failures = results.filter((r) => r.status === 'rejected');
+    assert(
+      failures.length === 0,
+      `${String(failures.length)} of 6 duplicate refreshes were refused`,
+    );
 
-    // The losers presented a token that had just been spent, which is what
-    // theft looks like, so the family is revoked -- including the winner.
-    const live = await liveTokens(racer.user.id);
+    // Every caller must be given a token that works, and they should all
+    // have been handed the same one.
+    const issued = new Set(
+      results.map((r) => (r.status === 'fulfilled' ? r.value.session.refreshToken : '')),
+    );
+    assert(issued.size === 1, `${String(issued.size)} different tokens were handed out`);
+
+    const [winner] = [...issued];
+    assert(winner, 'no token was issued');
+
+    // Still signed in, and the token just issued still works.
+    const after = await auth.refresh(winner, DEVICE);
+    assert(after.user.id === racer.user.id, 'the session did not survive');
+    createdUserIds.push(after.user.id);
+  });
+
+  await check('a replay long after the rotation still revokes the family', async () => {
+    // The grace window must not blunt reuse detection itself.
+    const victim = await auth.register(
+      { email: `race-theft-${stamp}@example.test`, password: PASSWORD, name: 'Victim' },
+      DEVICE,
+    );
+    createdUserIds.push(victim.user.id);
+
+    const stolen = victim.session.refreshToken;
+    const honest = await auth.refresh(stolen, DEVICE);
+
+    const { hashRefreshToken } = await import('../lib/tokens.js');
+    await db
+      .update(refreshTokens)
+      .set({ usedAt: new Date(Date.now() - 60_000), revokedAt: new Date(Date.now() - 60_000) })
+      .where(eq(refreshTokens.tokenHash, hashRefreshToken(stolen)));
+    auth.authInternals.forgetRotations();
+
+    await expectFailure(
+      () => auth.refresh(stolen, DEVICE),
+      'token_reuse_detected',
+      'a replay after the grace window',
+    );
+
+    // And the honest holder is signed out too, because the two cannot be
+    // told apart once a token is in two hands.
+    await expectFailure(
+      () => auth.refresh(honest.session.refreshToken, DEVICE),
+      'token_reuse_detected',
+      'the legitimate token after a detected theft',
+    );
+
+    const live = await liveTokens(victim.user.id);
     assert(live === 0, `${String(live)} tokens survived a detected reuse`);
   });
 

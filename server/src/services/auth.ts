@@ -321,11 +321,87 @@ export async function login(
 /* Refresh, with rotation and reuse detection                          */
 /* ------------------------------------------------------------------ */
 
+/**
+ * How long after rotation a token may be presented again innocently.
+ *
+ * A browser can genuinely send the same refresh cookie twice at once: two
+ * tabs waking together, or a page whose session restore and a 401 retry
+ * start in the same instant. Exactly one of those wins the rotation; the
+ * loser is holding a token that is now spent through no fault of its own.
+ *
+ * Treating that as theft signs the person out of a session they were using,
+ * which is what happened here -- the old MongoDB code let both requests
+ * through by accident, so the duplicate was never noticed.
+ *
+ * A few seconds is the whole window. An attacker with a stolen token still
+ * has to use it inside those seconds, and against the live user's own
+ * rotation, to go unnoticed. Auth0 and Okta make the same trade for the
+ * same reason.
+ */
+const ROTATION_GRACE_MS = 15_000;
+
+/**
+ * What a just-rotated token was exchanged for, kept briefly in memory.
+ *
+ * A second request arriving inside the grace window gets the identical
+ * answer the first one got, rather than a second token of its own. Both
+ * callers then hold the same cookie, which is what they would have had if
+ * the requests had not overlapped.
+ *
+ * In memory only, and never written down: it holds a token in plain text,
+ * which is exactly what must not reach the database.
+ */
+const recentRotations = new Map<string, { at: number; result: RefreshResult }>();
+
+interface RefreshResult {
+  user: Account;
+  session: IssuedSession;
+}
+
+function rememberRotation(tokenHash: string, result: RefreshResult): void {
+  recentRotations.set(tokenHash, { at: Date.now(), result });
+
+  // Swept on write; the map only ever holds the last few seconds of traffic.
+  for (const [key, entry] of recentRotations) {
+    if (Date.now() - entry.at > ROTATION_GRACE_MS) recentRotations.delete(key);
+  }
+}
+
+function recallRotation(tokenHash: string): RefreshResult | null {
+  const entry = recentRotations.get(tokenHash);
+  if (!entry) return null;
+
+  if (Date.now() - entry.at > ROTATION_GRACE_MS) {
+    recentRotations.delete(tokenHash);
+    return null;
+  }
+
+  return entry.result;
+}
+
+/** Forgets every cached rotation. Used when a family is revoked. */
+function forgetRotations(): void {
+  recentRotations.clear();
+}
+
+/**
+ * For the verification suite only.
+ *
+ * The grace window is measured against a clock, so a test cannot reach it
+ * by ageing rows in the database -- the cache would still answer first, as
+ * it should. Clearing it is how a test stands in for time having passed.
+ */
+export const authInternals = { forgetRotations, ROTATION_GRACE_MS };
+
 export async function refresh(
   presentedToken: string,
   device: DeviceInfo,
 ): Promise<{ user: Account; session: IssuedSession }> {
   const tokenHash = hashRefreshToken(presentedToken);
+
+  // A duplicate of a request that is still in flight, or has just finished.
+  const recalled = recallRotation(tokenHash);
+  if (recalled) return recalled;
 
   return db
     .transaction(async (tx) => {
@@ -358,6 +434,7 @@ export async function refresh(
             family: refreshTokens.family,
             usedAt: refreshTokens.usedAt,
             revokedAt: refreshTokens.revokedAt,
+            revokedReason: refreshTokens.revokedReason,
           })
           .from(refreshTokens)
           .where(eq(refreshTokens.tokenHash, tokenHash));
@@ -367,7 +444,33 @@ export async function refresh(
         }
 
         /*
-         * The token exists but has already been exchanged. Two parties
+         * Rotated a moment ago, by this same browser.
+         *
+         * The duplicate lost the race for the row and waited on its lock, so
+         * by now the winner has committed. If the winner's answer is still
+         * remembered it is returned unchanged; if this instance never saw it
+         * -- another process handled it -- a fresh token in the same family
+         * is issued instead, which is no weaker than the one the winner got.
+         */
+        const rotatedAt = record.usedAt?.getTime() ?? 0;
+        const withinGrace =
+          record.revokedReason === 'rotated' && Date.now() - rotatedAt <= ROTATION_GRACE_MS;
+
+        if (withinGrace) {
+          const shared = recallRotation(tokenHash);
+          if (shared) return shared;
+
+          const account = await getAccount(record.userId, tx);
+          if (!account) {
+            throw new HttpError(401, 'Please sign in again.', 'user_not_found');
+          }
+
+          return { user: account, session: await issueSession(tx, account, device, record.family) };
+        }
+
+        /*
+         * The token exists, was spent long enough ago that no honest client
+         * would still be holding it, and has turned up again. Two parties
          * therefore hold it, and we cannot tell which is legitimate. Revoke
          * the whole family so both are forced to re-authenticate -- the
          * attacker loses access, and the real user is inconvenienced once
@@ -378,6 +481,8 @@ export async function refresh(
          */
         if (record.usedAt || record.revokedAt) {
           await revokeWhere(tx, eq(refreshTokens.family, record.family), 'reuse_detected');
+          // Nothing cached may outlive the session it belonged to.
+          forgetRotations();
 
           logger.warn(
             { userId: record.userId, family: record.family },
@@ -399,6 +504,10 @@ export async function refresh(
     })
     .then((result) => {
       if (!result) throw new HttpError(401, 'Please sign in again.', 'token_reuse_detected');
+
+      // Remembered only after the transaction commits, so a rolled-back
+      // rotation can never be handed to a second caller.
+      rememberRotation(tokenHash, result);
       return result;
     });
 }

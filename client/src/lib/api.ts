@@ -77,6 +77,9 @@ interface RequestOptions {
 /** Shared in-flight refresh, so ten simultaneous 401s cause one refresh. */
 let refreshInFlight: Promise<boolean> | null = null;
 
+/** The same, for the session restore that runs on page load. */
+let restoreInFlight: Promise<PublicUser | null> | null = null;
+
 async function attemptRefresh(): Promise<boolean> {
   refreshInFlight ??= (async () => {
     try {
@@ -176,19 +179,36 @@ export const api = {
     return data.user;
   },
 
-  /** Restores a session on page load, using only the refresh cookie. */
+  /**
+   * Restores a session on page load, using only the refresh cookie.
+   *
+   * Shares one in-flight request, like the 401 retry does. React runs a
+   * mount effect twice in development, and two tabs can wake together, so
+   * this was firing the same refresh cookie at the server several times at
+   * once -- which the server has every right to read as a stolen token.
+   */
   async restore(): Promise<PublicUser | null> {
-    try {
-      const data = await request<SessionResponse>('/auth/refresh', {
-        method: 'POST',
-        skipRefresh: true,
-      });
-      accessToken = data.accessToken;
-      return data.user;
-    } catch {
-      accessToken = null;
-      return null;
-    }
+    restoreInFlight ??= (async () => {
+      try {
+        const data = await request<SessionResponse>('/auth/refresh', {
+          method: 'POST',
+          skipRefresh: true,
+        });
+        accessToken = data.accessToken;
+        return data.user;
+      } catch {
+        accessToken = null;
+        return null;
+      } finally {
+        // Cleared a tick later, so everyone waiting on this attempt sees its
+        // result before another can start.
+        setTimeout(() => {
+          restoreInFlight = null;
+        }, 0);
+      }
+    })();
+
+    return restoreInFlight;
   },
 
   async logout(): Promise<void> {

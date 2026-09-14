@@ -49,8 +49,20 @@ function setSession(res: Response, session: auth.IssuedSession): void {
   res.cookie(REFRESH_COOKIE, session.refreshToken, refreshCookieOptions());
 }
 
+/**
+ * The same cookie attributes, without a lifetime.
+ *
+ * A browser only clears a cookie when the attributes match the ones it was
+ * set with, so these must be passed -- but Express 5 refuses maxAge here,
+ * and passing it as undefined still counts as passing it.
+ */
+function withoutMaxAge<T extends { maxAge?: number }>(options: T): Omit<T, 'maxAge'> {
+  const { maxAge: _lifetime, ...rest } = options;
+  return rest;
+}
+
 function clearSession(res: Response): void {
-  res.clearCookie(REFRESH_COOKIE, { ...refreshCookieOptions(), maxAge: undefined });
+  res.clearCookie(REFRESH_COOKIE, withoutMaxAge(refreshCookieOptions()));
 }
 
 function deviceOf(req: Request): auth.DeviceInfo {
@@ -290,8 +302,8 @@ export function authRoutes(): Router {
   router.get('/google/callback', (req, res) => {
     void (async () => {
       const finish = (path: string): void => {
-        res.clearCookie(OAUTH_STATE_COOKIE, oauthCookieOptions());
-        res.clearCookie(OAUTH_VERIFIER_COOKIE, oauthCookieOptions());
+        res.clearCookie(OAUTH_STATE_COOKIE, withoutMaxAge(oauthCookieOptions()));
+        res.clearCookie(OAUTH_VERIFIER_COOKIE, withoutMaxAge(oauthCookieOptions()));
         res.redirect(`${env.CLIENT_ORIGIN}${path}`);
       };
 
@@ -337,8 +349,8 @@ export function authRoutes(): Router {
         setSession(res, session);
         finish('/auth/complete');
       } catch (err) {
-        res.clearCookie(OAUTH_STATE_COOKIE, oauthCookieOptions());
-        res.clearCookie(OAUTH_VERIFIER_COOKIE, oauthCookieOptions());
+        res.clearCookie(OAUTH_STATE_COOKIE, withoutMaxAge(oauthCookieOptions()));
+        res.clearCookie(OAUTH_VERIFIER_COOKIE, withoutMaxAge(oauthCookieOptions()));
 
         /*
          * Some failures here are decisions, not faults. Telling someone
