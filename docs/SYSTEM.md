@@ -16,7 +16,7 @@ Four workspaces in one repository:
 
 ```
 shared/   Types, schemas and pure logic used by everything else
-server/   Express API, Socket.IO gateway, MongoDB models
+server/   Express API, Socket.IO gateway, PostgreSQL schema
 client/   The presenter app — sign in, build decks, present
 join/     The participant app — what a phone opens
 ```
@@ -44,14 +44,38 @@ Sharing one app would have forced the phone to download the editor.
 
 ## 2. The data model
 
-Five collections, each with a reason to exist separately.
+PostgreSQL, through Drizzle ORM. The schema is one file,
+`server/src/db/schema.ts`; migrations are plain SQL in `server/drizzle/`,
+generated from it with `npm run db:generate -w server` and applied
+automatically when the server starts, under an advisory lock so two
+instances starting together cannot both apply one.
+
+Three decisions shape it:
+
+- **Ids are 24-character hex strings**, the shape MongoDB used. The data
+  moved from MongoDB with every id intact, so links, signed tokens and
+  refresh cookies issued before the move still work. New ids keep the same
+  shape and sort by creation time, which keyset pagination relies on.
+- **Nested data is a table only where it is queried on its own.** A user's
+  linked Google accounts are looked up by provider and subject, so they get
+  a table whose primary key makes one Google account map to exactly one
+  Pulse account. A deck's slides and a session's snapshot are only ever
+  read and written whole, so they stay JSONB.
+- **Rules live in the database where it can express them.** Foreign keys,
+  a CHECK on every enumerated column, lowercase emails, and `has_password`
+  as a generated column that cannot disagree with the hash it describes.
 
 ### Deck — the template
 
-What an author builds and edits. Slides are embedded rather than stored
-separately: a deck is always read and written whole, so embedding means one
-round trip instead of a join, and the 16MB document limit is far beyond any
-realistic deck.
+What an author builds and edits. Slides are a JSONB array rather than rows
+of their own: a deck is always read and written whole, so one row means one
+round trip instead of a join.
+
+Every edit takes a row lock for its duration. Edits read the deck, change
+it and write it back, so without the lock two editor panels saving at once
+each start from the same version and the second silently discards the
+first's change. A test fires ten slide inserts at once and, with the lock
+removed, loses two of them.
 
 Slide order uses **fractional positions**. Slides sit at 1000, 2000, 3000,
 so inserting between two writes one number rather than renumbering the rest.
@@ -96,6 +120,36 @@ every index earns its place. Two decisions matter:
 
 Password (Argon2id) or Google, or both linked. Carries `role`,
 `suspendedAt`, and a rolling AI request count.
+
+The password hash never leaves the auth service. The type the rest of the
+server works with does not have the field at all, rather than having it and
+relying on every query to leave it out.
+
+### What deleting does
+
+- Purging a deck keeps its sessions, with their deck reference cleared: the
+  record of having presented something is not the deck's to take with it.
+- Removing a participant removes their answers and questions with them.
+- Removing an account removes everything it owns.
+
+### Races the database settles
+
+Each of these was a check followed by a write, which two requests can both
+pass. Each is now decided by a single statement, a lock or a constraint, and
+each has a test that fires the requests at the same moment:
+
+- The same refresh token presented at once: exactly one succeeds.
+- Sign-ups for the same email at once: exactly one account.
+- Present pressed several times at once: one session. Separately, two live
+  sessions can never hold the same join code; the database refuses it.
+- Several different answers from one phone to one slide at once: one kept.
+- The daily AI limit: it holds however many requests arrive together.
+
+A race test is only worth something if it fails without the protection.
+The deck lock and the answer lock were each removed and their tests seen to
+fail -- which is how the answer test turned out not to be racing at all
+until its connection pool was warmed first. The other three rest on a
+unique index or a single conditional statement rather than a lock.
 
 ---
 
@@ -350,10 +404,11 @@ Output carries a UTF-8 BOM, without which Excel mangles every accented name.
 | Suite | What it covers |
 |---|---|
 | Unit (vitest) | Schemas, aggregation, scoring, theme contrast, QR encoding, AI parsing |
-| `verify-models` | Indexes and constraints against the real database |
-| `verify-auth` | Rotation, reuse detection, social linking, account takeover |
-| `verify-decks` | Ownership boundaries, ordering, partial edits |
-| `verify-realtime` | Real socket clients: join, answer, retry, room isolation |
+| `db:verify` | Constraints, cascades and indexes, each proven by a write the database must refuse |
+| `auth:verify` | Rotation, reuse detection, social linking, account takeover, simultaneous requests |
+| `decks:verify` | Ownership boundaries, ordering, partial edits, simultaneous edits |
+| `cleanup:verify` | Retention windows, and above all what must survive |
+| `realtime:verify` | Real socket clients: join, answer, retry, room isolation (needs the server running) |
 
 The realtime suite drives actual Socket.IO connections rather than calling
 the service layer, because room isolation and broadcast fan-out only exist
@@ -366,6 +421,8 @@ Several tests exist because a real bug got through:
 - An XSS test used the wrong field name and silently tested nothing.
 - `hasPassword` was derived from a field the database does not load by
   default, so refresh reported a password account as passwordless.
+- Simultaneous deck edits overwrote each other. It was invisible to any
+  test that made one edit at a time.
 
 ---
 
@@ -375,16 +432,32 @@ Several tests exist because a real bug got through:
 npm install
 npm run theme:build          # generates CSS variables from design tokens
 
-# three terminals
-npm run dev --workspace @pulse/server    # :4000
-npm run dev --workspace @pulse/client    # :5173
-npm run dev --workspace @pulse/join      # :5174
+npm run dev                  # server :4000, presenter :5173, join :5174
 ```
 
 Configuration lives in `.env` at the repository root — see `.env.example`.
-The only required values are `MONGODB_URI`, `AUTH_SECRET` and
+The only required values are `DATABASE_URL`, `AUTH_SECRET` and
 `PRESENTER_TOKEN_SECRET`. Google sign-in and the AI providers are optional;
 without them those features hide themselves rather than failing.
+
+`DATABASE_URL` points at an empty PostgreSQL database; the server creates
+the tables itself on first start. `npm run db:ping -w server` checks the
+connection and explains the usual mistakes.
+
+### Moving data over from MongoDB
+
+A one-time copy, for an installation that ran on MongoDB before:
+
+```bash
+npm run db:import-mongo -w server -- --dry-run   # rehearse; writes nothing
+npm run db:import-mongo -w server                # copy for real
+```
+
+MongoDB is only read, never changed. The copy is a single transaction, and
+before it commits every row is compared field by field both with what was
+sent and with the original document; any difference rolls back everything.
+It refuses to write into a database that already holds Pulse data unless
+given `--replace`.
 
 For phones to reach the join page, `JOIN_ORIGIN` must be the machine's
 network address rather than `localhost`.

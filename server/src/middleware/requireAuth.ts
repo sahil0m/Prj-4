@@ -1,7 +1,10 @@
 import type { Request, Response, NextFunction } from 'express';
 import { HttpError } from '../app.js';
 import { verifyAccessToken } from '../lib/tokens.js';
-import { User } from '../models/index.js';
+import { and, eq, isNull } from 'drizzle-orm';
+import { db } from '../lib/db.js';
+import { isId } from '../db/ids.js';
+import { users } from '../db/schema.js';
 
 export interface AuthedUser {
   id: string;
@@ -38,9 +41,7 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction): v
         throw new HttpError(401, 'Your session expired.', 'token_expired');
       }
 
-      const user = await User.findOne({ _id: claims.sub, deletedAt: null })
-        .select('tokenVersion email name role suspendedAt suspendedReason')
-        .lean();
+      const user = await lookup(claims.sub);
 
       if (!user) {
         throw new HttpError(401, 'Please sign in.', 'user_not_found');
@@ -89,9 +90,7 @@ export function optionalAuth(req: Request, _res: Response, next: NextFunction): 
 
     try {
       const claims = verifyAccessToken(header.slice(7));
-      const user = await User.findOne({ _id: claims.sub, deletedAt: null })
-        .select('tokenVersion email name role suspendedAt')
-        .lean();
+      const user = await lookup(claims.sub);
 
       if (user?.tokenVersion === claims.tv && !user.suspendedAt) {
         (req as AuthedRequest).user = {
@@ -107,6 +106,30 @@ export function optionalAuth(req: Request, _res: Response, next: NextFunction): 
 
     next();
   })();
+}
+
+/**
+ * The few columns a request needs to trust its token.
+ *
+ * Runs on every authenticated request, so it reads only what the checks use
+ * rather than the whole account.
+ */
+async function lookup(userId: string) {
+  if (!isId(userId)) return null;
+
+  const [user] = await db
+    .select({
+      tokenVersion: users.tokenVersion,
+      email: users.email,
+      name: users.name,
+      role: users.role,
+      suspendedAt: users.suspendedAt,
+      suspendedReason: users.suspendedReason,
+    })
+    .from(users)
+    .where(and(eq(users.id, userId), isNull(users.deletedAt)));
+
+  return user ?? null;
 }
 
 /**

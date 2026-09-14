@@ -7,8 +7,9 @@
  *
  *   npm run admin:grant --workspace @pulse/server -- someone@example.com
  */
-import { connectDb, disconnectDb } from '../lib/db.js';
-import { User } from '../models/index.js';
+import { and, eq, isNull } from 'drizzle-orm';
+import { connectDb, disconnectDb, db } from '../lib/db.js';
+import { users } from '../db/schema.js';
 
 async function main(): Promise<void> {
   const email = process.argv[2]?.trim().toLowerCase();
@@ -21,26 +22,29 @@ async function main(): Promise<void> {
 
   await connectDb();
 
-  const user = await User.findOne({ email, deletedAt: null });
+  try {
+    const [user] = await db
+      .select({ id: users.id, role: users.role })
+      .from(users)
+      .where(and(eq(users.email, email), isNull(users.deletedAt)));
 
-  if (!user) {
-    process.stdout.write(`No account found for ${email}. Sign up first, then run this.\n`);
-    process.exitCode = 1;
+    if (!user) {
+      process.stdout.write(`No account found for ${email}. Sign up first, then run this.\n`);
+      process.exitCode = 1;
+      return;
+    }
+
+    if (user.role === 'admin') {
+      process.stdout.write(`${email} is already an admin.\n`);
+      return;
+    }
+
+    await db.update(users).set({ role: 'admin' }).where(eq(users.id, user.id));
+
+    process.stdout.write(`${email} is now an admin. Sign out and back in to see the admin area.\n`);
+  } finally {
     await disconnectDb();
-    return;
   }
-
-  if (user.role === 'admin') {
-    process.stdout.write(`${email} is already an admin.\n`);
-    await disconnectDb();
-    return;
-  }
-
-  user.role = 'admin';
-  await user.save();
-
-  process.stdout.write(`${email} is now an admin. Sign out and back in to see the admin area.\n`);
-  await disconnectDb();
 }
 
 void main().catch((err: unknown) => {

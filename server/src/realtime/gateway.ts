@@ -1,10 +1,12 @@
 import type { Server as HttpServer } from 'node:http';
 import { Server, type Socket } from 'socket.io';
-import { Types } from 'mongoose';
 import { isProduction, isAllowedOrigin } from '../config.js';
 import { logger } from '../lib/logger.js';
 import { verifyAccessToken } from '../lib/tokens.js';
-import { Session, User, AudienceQuestion, Response } from '../models/index.js';
+import { and, eq, isNull } from 'drizzle-orm';
+import { db } from '../lib/db.js';
+import { isId } from '../db/ids.js';
+import { users, type Session } from '../db/schema.js';
 import { HttpError } from '../app.js';
 import * as sessions from '../services/sessions.js';
 import { isProfane } from '../services/profanity.js';
@@ -145,13 +147,13 @@ export function attachRealtime(
             input.locale,
           );
 
-          context.sessionId = session._id.toString();
-          context.participantId = participant._id.toString();
+          context.sessionId = session.id;
+          context.participantId = participant.id;
 
           await socket.join(room.participants(context.sessionId));
 
-          const count = await sessions.countParticipants(session._id);
-          const slide = await sessions.participantSlideOf(session, participant._id);
+          const count = await sessions.countParticipants(session.id);
+          const slide = await sessions.participantSlideOf(session, participant.id);
 
           const result: JoinResult = {
             ok: true,
@@ -191,8 +193,8 @@ export function attachRealtime(
 
           const input = zSubmitAnswer.parse(raw);
 
-          const session = await Session.findById(sessionId);
-          const participant = await loadParticipant(participantId);
+          const session = await sessions.getSession(sessionId);
+          const participant = await sessions.getParticipant(participantId);
           if (!session || !participant) {
             ack({ ok: false, code: 'session_not_found', message: 'That session has ended.' });
             return;
@@ -237,7 +239,7 @@ export function attachRealtime(
             io.to(room.presenters(sessionId)).emit('leaderboard:update', { entries });
 
             const mine = entries.find((entry) => entry.participantId === participantId);
-            const stored = await Response.findById(responseId).select('isCorrect points').lean();
+            const stored = await sessions.scoreOf(responseId);
 
             // Only to this socket: a phone that could see the whole board
             // would turn the quiz into a copying exercise.
@@ -270,7 +272,7 @@ export function attachRealtime(
 
           const input = zAskQuestion.parse(raw);
 
-          const questionSession = await Session.findById(sessionId);
+          const questionSession = await sessions.getSession(sessionId);
           if (!questionSession) {
             ack({ ok: false, code: 'session_not_found', message: 'That session has ended.' });
             return;
@@ -295,32 +297,29 @@ export function attachRealtime(
             });
             return;
           }
-          const participant = await loadParticipant(participantId);
+          const participant = await sessions.getParticipant(participantId);
 
-          const question = await AudienceQuestion.create({
-            sessionId: new Types.ObjectId(sessionId),
-            participantId: new Types.ObjectId(participantId),
-            body: input.text,
-            // Denormalised so the presenter's queue needs no second lookup,
-            // and so it still reads correctly if the participant is removed.
-            authorName: participant?.displayName ?? '',
+          const { question, duplicate } = await sessions.askQuestion({
+            session: questionSession,
+            participant,
+            participantId,
+            text: input.text,
             clientMsgId: input.clientMsgId,
           });
 
           ack({ ok: true });
 
+          // A repeated clientMsgId means the phone retried; it is already on
+          // the presenter's screen and must not appear there twice.
+          if (duplicate) return;
+
           io.to(room.presenters(sessionId)).emit('question:new', {
-            id: question._id.toString(),
+            id: question.id,
             text: question.body,
             displayName: question.authorName,
             upvotes: 0,
           });
         } catch (err) {
-          // A repeated clientMsgId means the phone retried; that is a success.
-          if (isDuplicateKey(err)) {
-            ack({ ok: true });
-            return;
-          }
           ack(toAck(err));
         }
       })();
@@ -335,7 +334,7 @@ export function attachRealtime(
             return;
           }
 
-          const session = await Session.findById(sessionId);
+          const session = await sessions.getSession(sessionId);
           if (!session) {
             ack({ ok: false, code: 'session_not_found', message: 'That session has ended.' });
             return;
@@ -361,18 +360,14 @@ export function attachRealtime(
           }
 
           const input = zParticipantMove.parse(raw);
-          const session = await Session.findById(sessionId);
+          const session = await sessions.getSession(sessionId);
 
           if (!session) {
             ack({ ok: false, code: 'session_not_found', message: 'That session has ended.' });
             return;
           }
 
-          const slide = await sessions.moveParticipant(
-            session,
-            new Types.ObjectId(participantId),
-            input.direction,
-          );
+          const slide = await sessions.moveParticipant(session, participantId, input.direction);
 
           // Only to this socket: in a self-paced session everyone is
           // somewhere different, and broadcasting would drag the room along.
@@ -395,7 +390,7 @@ export function attachRealtime(
       void (async () => {
         // Checked on the server as well as hidden in the interface: a phone
         // can emit whatever event it likes.
-        const reactionSession = await Session.findById(sessionId);
+        const reactionSession = await sessions.getSession(sessionId);
         if (!reactionSession || !sessions.allowsReactions(reactionSession)) return;
 
         // Ephemeral by design: never stored, just shown. Sent to the room as
@@ -414,18 +409,18 @@ export function attachRealtime(
           const input = zPresenterJoin.parse(raw);
           const ownerId = await authenticate(socket);
 
-          const session = await Session.findOne({ _id: input.sessionId, ownerId });
+          const session = await sessions.findOwnedSession(input.sessionId, ownerId);
           if (!session) {
             ack({ ok: false, code: 'session_not_found', message: 'That session was not found.' });
             return;
           }
 
-          context.sessionId = session._id.toString();
+          context.sessionId = session.id;
           context.ownerId = ownerId;
 
           await socket.join(room.presenters(context.sessionId));
 
-          const count = await sessions.countParticipants(session._id);
+          const count = await sessions.countParticipants(session.id);
           socket.emit('session:state', sessions.toSessionState(session, count));
 
           if (session.currentSlideId) {
@@ -446,28 +441,16 @@ export function attachRealtime(
     socket.on('presenter:goto', (raw, ack) => {
       void (async () => {
         try {
-          const session = await requirePresenter(context);
+          const current = await requirePresenter(context);
           const input = zGoToSlide.parse(raw);
 
-          const slide = sessions.slideOf(session, input.slideId);
-          if (!slide) {
+          if (!sessions.slideOf(current, input.slideId)) {
             ack({ ok: false, code: 'slide_not_found', message: 'That slide is not in this deck.' });
             return;
           }
 
-          session.currentSlideId = input.slideId;
-
-          // A quiz slide's clock starts when the room first sees it, so
-          // everyone is scored against the same moment.
-          if (Number(slide.config.countdownSeconds ?? 0) > 0) {
-            session.countdownStartedAt = new Date();
-            session.countdownSlideId = input.slideId;
-          } else {
-            session.countdownStartedAt = null;
-            session.countdownSlideId = null;
-          }
-
-          await session.save();
+          // Starts a quiz slide's countdown as the room first sees it.
+          const session = await sessions.goToSlide(current, input.slideId);
           await broadcastSlide(io, session);
 
           ack({ ok: true });
@@ -480,9 +463,11 @@ export function attachRealtime(
     socket.on('presenter:participation', (raw, ack) => {
       void (async () => {
         try {
-          const session = await requirePresenter(context);
-          session.participationOpen = zSetParticipation.parse(raw).open;
-          await session.save();
+          const current = await requirePresenter(context);
+          const session = await sessions.setParticipation(
+            current,
+            zSetParticipation.parse(raw).open,
+          );
           await broadcastState(io, session);
           ack({ ok: true });
         } catch (err) {
@@ -494,9 +479,11 @@ export function attachRealtime(
     socket.on('presenter:results-visible', (raw, ack) => {
       void (async () => {
         try {
-          const session = await requirePresenter(context);
-          session.resultsVisible = zSetResultsVisible.parse(raw).visible;
-          await session.save();
+          const current = await requirePresenter(context);
+          const session = await sessions.setResultsVisible(
+            current,
+            zSetResultsVisible.parse(raw).visible,
+          );
           await broadcastState(io, session);
           ack({ ok: true });
         } catch (err) {
@@ -512,12 +499,12 @@ export function attachRealtime(
           const input = zRemoveResponse.parse(raw);
 
           const { slideId } = await sessions.removeResponse(
-            session._id.toString(),
-            objectIdToString(session.ownerId),
+            session.id,
+            session.ownerId,
             input.responseId,
           );
 
-          const sessionId = session._id.toString();
+          const sessionId = session.id;
           io.to(room.presenters(sessionId)).emit('response:removed', {
             slideId,
             responseId: input.responseId,
@@ -537,9 +524,9 @@ export function attachRealtime(
       void (async () => {
         try {
           const session = await requirePresenter(context);
-          const sessionId = session._id.toString();
+          const sessionId = session.id;
 
-          await sessions.endSession(sessionId, objectIdToString(session.ownerId));
+          await sessions.endSession(sessionId, session.ownerId);
 
           io.to(room.participants(sessionId))
             .to(room.presenters(sessionId))
@@ -564,7 +551,7 @@ export function attachRealtime(
       // phone that locks its screen has not left the room.
       void (async () => {
         try {
-          const count = await sessions.countParticipants(new Types.ObjectId(sessionId));
+          const count = await sessions.countParticipants(sessionId);
           io.to(room.presenters(sessionId)).emit('participants:count', { count });
         } catch {
           // A disconnect during shutdown is not worth logging.
@@ -601,9 +588,12 @@ async function authenticate(socket: Sock): Promise<string> {
     throw new HttpError(401, 'Your session expired.', 'token_expired');
   }
 
-  const user = await User.findOne({ _id: claims.sub, deletedAt: null })
-    .select('tokenVersion')
-    .lean();
+  const [user] = isId(claims.sub)
+    ? await db
+        .select({ tokenVersion: users.tokenVersion })
+        .from(users)
+        .where(and(eq(users.id, claims.sub), isNull(users.deletedAt)))
+    : [];
 
   if (!user) throw new HttpError(401, 'Please sign in.', 'user_not_found');
   if (user.tokenVersion !== claims.tv) {
@@ -614,28 +604,23 @@ async function authenticate(socket: Sock): Promise<string> {
 }
 
 /** Reloads the session, confirming this socket is still its presenter. */
-async function requirePresenter(context: SocketContext) {
+async function requirePresenter(context: SocketContext): Promise<Session> {
   if (!context.sessionId || !context.ownerId) {
     throw new HttpError(403, 'You are not presenting this session.', 'not_presenter');
   }
 
-  const session = await Session.findOne({ _id: context.sessionId, ownerId: context.ownerId });
+  const session = await sessions.findOwnedSession(context.sessionId, context.ownerId);
   if (!session) throw new HttpError(404, 'That session was not found.', 'session_not_found');
 
   return session;
 }
 
-async function loadParticipant(participantId: string) {
-  const { Participant } = await import('../models/index.js');
-  return Participant.findById(participantId);
-}
-
 async function broadcastState(
   io: Server<ClientEvents, ServerEvents, Record<string, never>, SocketContext>,
-  session: Awaited<ReturnType<typeof requirePresenter>>,
+  session: Session,
 ): Promise<void> {
-  const sessionId = session._id.toString();
-  const count = await sessions.countParticipants(session._id);
+  const sessionId = session.id;
+  const count = await sessions.countParticipants(session.id);
   const state = sessions.toSessionState(session, count);
 
   io.to(room.presenters(sessionId)).to(room.participants(sessionId)).emit('session:state', state);
@@ -650,11 +635,11 @@ async function broadcastState(
  */
 async function broadcastSlide(
   io: Server<ClientEvents, ServerEvents, Record<string, never>, SocketContext>,
-  session: Awaited<ReturnType<typeof requirePresenter>>,
+  session: Session,
 ): Promise<void> {
   await broadcastState(io, session);
 
-  const sessionId = session._id.toString();
+  const sessionId = session.id;
   const sockets = await io.in(room.participants(sessionId)).fetchSockets();
 
   for (const participantSocket of sockets) {
@@ -663,7 +648,7 @@ async function broadcastSlide(
     // guess if one somehow does not.
     if (!participantId) continue;
 
-    const slide = await sessions.participantSlideOf(session, new Types.ObjectId(participantId));
+    const slide = await sessions.participantSlideOf(session, participantId);
     participantSocket.emit('slide:show', slide);
   }
 
@@ -674,25 +659,12 @@ async function broadcastSlide(
 
   // A leaderboard slide needs the standings the moment it appears, not
   // after the next answer happens to arrive.
-  const slide = sessions.slideOf(session, session.currentSlideId ?? null);
+  const slide = sessions.slideOf(session, session.currentSlideId);
 
   if (slide?.kind === 'leaderboard') {
     const entries = await sessions.leaderboardFor(session);
     io.to(room.presenters(sessionId)).emit('leaderboard:update', { entries });
   }
-}
-
-/**
- * Mongoose types a populated-or-not ref as a union, so `.toString()` on it is
- * flagged as a possible Object stringification. It is always an ObjectId here
- * because these documents are never populated.
- */
-function objectIdToString(value: unknown): string {
-  return (value as Types.ObjectId).toString();
-}
-
-function isDuplicateKey(err: unknown): boolean {
-  return typeof err === 'object' && err !== null && (err as { code?: number }).code === 11000;
 }
 
 export const realtimeInternals = { RateLimiter, isProduction };

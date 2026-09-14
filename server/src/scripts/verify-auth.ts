@@ -5,8 +5,9 @@
  *
  *   npm run auth:verify -w server
  */
-import { connectDb, disconnectDb } from '../lib/db.js';
-import { User, RefreshToken } from '../models/index.js';
+import { and, count, eq, inArray, isNull } from 'drizzle-orm';
+import { connectDb, disconnectDb, db } from '../lib/db.js';
+import { users, refreshTokens } from '../db/schema.js';
 import * as auth from '../services/auth.js';
 import { verifyAccessToken } from '../lib/tokens.js';
 import { HttpError } from '../app.js';
@@ -30,6 +31,15 @@ async function check(label: string, fn: () => Promise<void> | void) {
     const msg = err instanceof Error ? err.message : String(err);
     process.stdout.write(`  ${R}FAIL${X}  ${label}\n        ${D}${msg}${X}\n`);
   }
+}
+
+/** Refresh tokens still usable for an account. */
+async function liveTokens(userId: string): Promise<number> {
+  const [row] = await db
+    .select({ value: count() })
+    .from(refreshTokens)
+    .where(and(eq(refreshTokens.userId, userId), isNull(refreshTokens.revokedAt)));
+  return row?.value ?? 0;
 }
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -69,7 +79,7 @@ async function main() {
     { email, password: PASSWORD, name: 'Verify User' },
     DEVICE,
   );
-  createdUserIds.push(registered.user._id.toString());
+  createdUserIds.push(registered.user.id);
 
   await check('registration creates an account and a session', () => {
     assert(registered.user.email === email, 'email not normalised');
@@ -79,13 +89,16 @@ async function main() {
 
   await check('the access token carries the right claims', () => {
     const claims = verifyAccessToken(registered.session.accessToken);
-    assert(claims.sub === registered.user._id.toString(), 'subject mismatch');
+    assert(claims.sub === registered.user.id, 'subject mismatch');
     assert(claims.tv === 0, 'token version should start at zero');
     assert(claims.email === email, 'email claim missing');
   });
 
   await check('the password is stored as an argon2id hash, never in plain text', async () => {
-    const row = await User.findById(registered.user._id).select('+passwordHash').lean();
+    const [row] = await db
+      .select({ passwordHash: users.passwordHash })
+      .from(users)
+      .where(eq(users.id, registered.user.id));
     assert(row?.passwordHash, 'no hash stored');
     assert(
       row.passwordHash.startsWith('$argon2id$'),
@@ -95,7 +108,10 @@ async function main() {
   });
 
   await check('the refresh token is stored hashed, never in plain text', async () => {
-    const stored = await RefreshToken.findOne({ userId: registered.user._id }).lean();
+    const [stored] = await db
+      .select({ tokenHash: refreshTokens.tokenHash })
+      .from(refreshTokens)
+      .where(eq(refreshTokens.userId, registered.user.id));
     assert(stored, 'no refresh token row');
     assert(
       stored.tokenHash !== registered.session.refreshToken,
@@ -116,7 +132,7 @@ async function main() {
 
   await check('login succeeds with the right password', async () => {
     const result = await auth.login(email, PASSWORD, DEVICE);
-    assert(result.user._id.toString() === registered.user._id.toString(), 'wrong user returned');
+    assert(result.user.id === registered.user.id, 'wrong user returned');
   });
 
   await check('login fails with the wrong password', () =>
@@ -197,9 +213,10 @@ async function main() {
 
   await check('the old refresh token is retired after use', async () => {
     const { hashRefreshToken } = await import('../lib/tokens.js');
-    const old = await RefreshToken.findOne({
-      tokenHash: hashRefreshToken(first.session.refreshToken),
-    }).lean();
+    const [old] = await db
+      .select({ usedAt: refreshTokens.usedAt, revokedReason: refreshTokens.revokedReason })
+      .from(refreshTokens)
+      .where(eq(refreshTokens.tokenHash, hashRefreshToken(first.session.refreshToken)));
     assert(old?.usedAt, 'the used token was not marked');
     assert(old.revokedReason === 'rotated', `unexpected reason: ${String(old.revokedReason)}`);
   });
@@ -250,19 +267,22 @@ async function main() {
     const beforeA = verifyAccessToken(a.session.accessToken);
     assert(beforeA.sub, 'token unreadable before logout');
 
-    await auth.logoutEverywhere(a.user._id.toString());
+    await auth.logoutEverywhere(a.user.id);
 
     // The JWT still verifies cryptographically; what changes is that its
     // token version no longer matches the account, which is what the
     // requireAuth middleware checks.
-    const fresh = await User.findById(a.user._id).lean();
+    const [fresh] = await db
+      .select({ tokenVersion: users.tokenVersion })
+      .from(users)
+      .where(eq(users.id, a.user.id));
     assert(fresh, 'user vanished');
     const claimsA = verifyAccessToken(a.session.accessToken);
     const claimsB = verifyAccessToken(b.session.accessToken);
     assert(fresh.tokenVersion > claimsA.tv, 'token version was not bumped');
     assert(fresh.tokenVersion > claimsB.tv, 'second session not invalidated');
 
-    const live = await RefreshToken.countDocuments({ userId: a.user._id, revokedAt: null });
+    const live = await liveTokens(a.user.id);
     assert(live === 0, `${live} refresh tokens survived logout-everywhere`);
   });
 
@@ -273,10 +293,10 @@ async function main() {
       { email: `pw-${stamp}@example.test`, password: PASSWORD, name: 'PW User' },
       DEVICE,
     );
-    createdUserIds.push(u.user._id.toString());
+    createdUserIds.push(u.user.id);
 
     await expectFailure(
-      () => auth.changePassword(u.user._id.toString(), 'wrong-current', 'a-brand-new-passphrase'),
+      () => auth.changePassword(u.user.id, 'wrong-current', 'a-brand-new-passphrase'),
       'invalid_credentials',
       'change with wrong current password',
     );
@@ -287,15 +307,18 @@ async function main() {
       { email: `pw2-${stamp}@example.test`, password: PASSWORD, name: 'PW2 User' },
       DEVICE,
     );
-    createdUserIds.push(u.user._id.toString());
+    createdUserIds.push(u.user.id);
 
     await auth.login(u.user.email, PASSWORD, DEVICE);
-    await auth.changePassword(u.user._id.toString(), PASSWORD, 'a-brand-new-passphrase');
+    await auth.changePassword(u.user.id, PASSWORD, 'a-brand-new-passphrase');
 
-    const live = await RefreshToken.countDocuments({ userId: u.user._id, revokedAt: null });
+    const live = await liveTokens(u.user.id);
     assert(live === 0, `${live} sessions survived a password change`);
 
-    const fresh = await User.findById(u.user._id).lean();
+    const [fresh] = await db
+      .select({ tokenVersion: users.tokenVersion })
+      .from(users)
+      .where(eq(users.id, u.user.id));
     assert(fresh && fresh.tokenVersion > 0, 'token version not bumped on password change');
   });
 
@@ -304,9 +327,9 @@ async function main() {
       { email: `pw3-${stamp}@example.test`, password: PASSWORD, name: 'PW3 User' },
       DEVICE,
     );
-    createdUserIds.push(u.user._id.toString());
+    createdUserIds.push(u.user.id);
 
-    await auth.changePassword(u.user._id.toString(), PASSWORD, 'the-replacement-passphrase');
+    await auth.changePassword(u.user.id, PASSWORD, 'the-replacement-passphrase');
     const ok = await auth.login(u.user.email, 'the-replacement-passphrase', DEVICE);
     assert(ok.session.accessToken, 'new password rejected');
 
@@ -329,22 +352,22 @@ async function main() {
   };
 
   const social = await auth.socialLogin(googleProfile, DEVICE);
-  createdUserIds.push(social.user._id.toString());
+  createdUserIds.push(social.user.id);
 
   await check('a first social sign-in creates the account', () => {
     assert(social.created, 'expected a new account');
-    assert(social.user.identities.length === 1, 'identity not linked');
+    assert(
+      social.user.providers.length === 1 && social.user.providers[0] === 'google',
+      'identity not linked',
+    );
     assert(social.user.emailVerifiedAt, 'verified email not recorded');
-    assert(!social.user.passwordHash, 'a social account should have no password');
+    assert(!social.user.hasPassword, 'a social account should have no password');
   });
 
   await check('signing in again with the same provider reuses the account', async () => {
     const again = await auth.socialLogin(googleProfile, DEVICE);
     assert(!again.created, 'a duplicate account was created');
-    assert(
-      again.user._id.toString() === social.user._id.toString(),
-      'a different account was returned',
-    );
+    assert(again.user.id === social.user.id, 'a different account was returned');
   });
 
   await check('a verified social email links to an existing password account', async () => {
@@ -353,14 +376,16 @@ async function main() {
       { email: linkEmail, password: PASSWORD, name: 'Link User' },
       DEVICE,
     );
-    createdUserIds.push(existing.user._id.toString());
+    createdUserIds.push(existing.user.id);
 
     const linked = await auth.socialLogin(
       { ...googleProfile, subject: `sub-link-${stamp}`, email: linkEmail, emailVerified: true },
       DEVICE,
     );
     assert(!linked.created, 'a second account was created instead of linking');
-    assert(linked.user.identities.length === 1, 'identity not attached');
+    assert(linked.user.providers.includes('google'), 'identity not attached');
+    // Linking adds a way in; it must not take the password away.
+    assert(linked.user.hasPassword, 'linking Google removed the existing password');
   });
 
   await check('an UNVERIFIED social email cannot hijack an existing account', async () => {
@@ -371,7 +396,7 @@ async function main() {
       { email: victimEmail, password: PASSWORD, name: 'Victim' },
       DEVICE,
     );
-    createdUserIds.push(victim.user._id.toString());
+    createdUserIds.push(victim.user.id);
 
     await expectFailure(
       () =>
@@ -405,14 +430,14 @@ async function main() {
       { email: `sess-${stamp}@example.test`, password: PASSWORD, name: 'Sess User' },
       DEVICE,
     );
-    createdUserIds.push(u.user._id.toString());
+    createdUserIds.push(u.user.id);
 
     const second = await auth.login(u.user.email, PASSWORD, {
       userAgent: 'Other Device',
       ip: '198.51.100.4',
     });
 
-    const list = await auth.listSessions(u.user._id.toString(), second.session.refreshToken);
+    const list = await auth.listSessions(u.user.id, second.session.refreshToken);
     assert(list.length === 2, `expected 2 sessions, found ${list.length}`);
     assert(list.filter((s) => s.current).length === 1, 'exactly one session should be current');
   });
@@ -422,16 +447,16 @@ async function main() {
       { email: `rev-${stamp}@example.test`, password: PASSWORD, name: 'Rev User' },
       DEVICE,
     );
-    createdUserIds.push(u.user._id.toString());
+    createdUserIds.push(u.user.id);
     await auth.login(u.user.email, PASSWORD, { userAgent: 'Second', ip: '198.51.100.9' });
 
-    const before = await auth.listSessions(u.user._id.toString());
+    const before = await auth.listSessions(u.user.id);
     assert(before.length === 2, 'setup failed');
     const target = before[0];
     assert(target, 'no session to revoke');
 
-    await auth.revokeSession(u.user._id.toString(), target.id);
-    const after = await auth.listSessions(u.user._id.toString());
+    await auth.revokeSession(u.user.id, target.id);
+    const after = await auth.listSessions(u.user.id);
     assert(after.length === 1, `expected 1 session left, found ${after.length}`);
   });
 
@@ -444,14 +469,14 @@ async function main() {
       { email: `other-${stamp}@example.test`, password: PASSWORD, name: 'Other' },
       DEVICE,
     );
-    createdUserIds.push(a.user._id.toString(), b.user._id.toString());
+    createdUserIds.push(a.user.id, b.user.id);
 
-    const theirs = await auth.listSessions(a.user._id.toString());
+    const theirs = await auth.listSessions(a.user.id);
     const target = theirs[0];
     assert(target, 'setup failed');
 
     await expectFailure(
-      () => auth.revokeSession(b.user._id.toString(), target.id),
+      () => auth.revokeSession(b.user.id, target.id),
       'session_not_found',
       'cross-account session revocation',
     );
@@ -460,7 +485,7 @@ async function main() {
   /* ---------------- public shape ---------------- */
 
   await check('the public user shape never leaks the password hash', async () => {
-    const u = await User.findById(registered.user._id).select('+passwordHash');
+    const u = await auth.getAccount(registered.user.id);
     assert(u, 'user missing');
     const publicUser = auth.toPublicUser(u);
     const serialised = JSON.stringify(publicUser);
@@ -469,16 +494,17 @@ async function main() {
     assert(publicUser.hasPassword, 'hasPassword flag should be true here');
   });
 
-  // The bug this guards: hasPassword used to be derived from passwordHash,
-  // which is select:false. Any path that did not ask for the hash — refresh,
-  // for one — reported a password account as having no password, which would
-  // let the account-settings screen overwrite a credential without asking for
-  // the current one. Load the user the ordinary way, with no projection.
-  await check('hasPassword survives a query that omits the hash', async () => {
-    const u = await User.findById(registered.user._id);
+  // The bug this guards: hasPassword was once derived from a hash that most
+  // queries did not load, so any path that skipped it -- refresh, for one --
+  // reported a password account as having none, which would let the account
+  // settings screen overwrite a credential without asking for the current
+  // one. An account now never carries the hash at all; the flag must still
+  // be right.
+  await check('hasPassword is right on an account that never loads the hash', async () => {
+    const u = await auth.getAccount(registered.user.id);
     assert(u, 'user missing');
-    assert(u.passwordHash === undefined, 'hash should not be selected here');
-    assert(auth.toPublicUser(u).hasPassword, 'hasPassword must not depend on the projection');
+    assert(!('passwordHash' in u), 'an account carried the password hash');
+    assert(auth.toPublicUser(u).hasPassword, 'hasPassword must not depend on loading the hash');
   });
 
   await check('a refreshed session still reports hasPassword', async () => {
@@ -486,7 +512,7 @@ async function main() {
       { email: `proj-${stamp}@example.test`, password: PASSWORD, name: 'Projection Probe' },
       DEVICE,
     );
-    createdUserIds.push(fresh.user._id.toString());
+    createdUserIds.push(fresh.user.id);
 
     const rotated = await auth.refresh(fresh.session.refreshToken, DEVICE);
     assert(
@@ -509,12 +535,12 @@ async function main() {
       { email: suspendedEmail, password: PASSWORD, name: 'Suspended' },
       DEVICE,
     );
-    createdUserIds.push(made.user._id.toString());
+    createdUserIds.push(made.user.id);
 
-    await User.updateOne(
-      { _id: made.user._id },
-      { $set: { suspendedAt: new Date(), suspendedReason: 'Testing' } },
-    );
+    await db
+      .update(users)
+      .set({ suspendedAt: new Date(), suspendedReason: 'Testing' })
+      .where(eq(users.id, made.user.id));
 
     await expectFailure(
       () => auth.login(suspendedEmail, PASSWORD, DEVICE),
@@ -529,9 +555,9 @@ async function main() {
       { email: suspendedEmail, password: PASSWORD, name: 'Suspended Two' },
       DEVICE,
     );
-    createdUserIds.push(made.user._id.toString());
+    createdUserIds.push(made.user.id);
 
-    await User.updateOne({ _id: made.user._id }, { $set: { suspendedAt: new Date() } });
+    await db.update(users).set({ suspendedAt: new Date() }).where(eq(users.id, made.user.id));
 
     // Credentials are checked first on purpose. Announcing the suspension
     // to someone who does not know the password would tell anyone who
@@ -549,23 +575,85 @@ async function main() {
       { email: restoredEmail, password: PASSWORD, name: 'Restored' },
       DEVICE,
     );
-    createdUserIds.push(made.user._id.toString());
+    createdUserIds.push(made.user.id);
 
-    await User.updateOne({ _id: made.user._id }, { $set: { suspendedAt: new Date() } });
-    await User.updateOne(
-      { _id: made.user._id },
-      { $set: { suspendedAt: null, suspendedReason: '' } },
-    );
+    await db.update(users).set({ suspendedAt: new Date() }).where(eq(users.id, made.user.id));
+    await db
+      .update(users)
+      .set({ suspendedAt: null, suspendedReason: '' })
+      .where(eq(users.id, made.user.id));
 
     const result = await auth.login(restoredEmail, PASSWORD, DEVICE);
-    assert(result.user._id.toString() === made.user._id.toString(), 'restored account was refused');
+    assert(result.user.id === made.user.id, 'restored account was refused');
+  });
+
+  /* ---------------- concurrency ---------------- */
+
+  /*
+   * Guarantees that only hold if the database enforces them. Each check
+   * fires the same request several times at once rather than one after
+   * another, because a race never shows up in a test that waits its turn.
+   */
+
+  await check('the same refresh token presented at once is honoured exactly once', async () => {
+    const racer = await auth.register(
+      { email: `race-refresh-${stamp}@example.test`, password: PASSWORD, name: 'Racer' },
+      DEVICE,
+    );
+    createdUserIds.push(racer.user.id);
+
+    const results = await Promise.allSettled(
+      Array.from({ length: 5 }, () => auth.refresh(racer.session.refreshToken, DEVICE)),
+    );
+
+    const succeeded = results.filter((r) => r.status === 'fulfilled').length;
+    assert(succeeded === 1, `${String(succeeded)} of 5 simultaneous refreshes succeeded`);
+
+    // The losers presented a token that had just been spent, which is what
+    // theft looks like, so the family is revoked -- including the winner.
+    const live = await liveTokens(racer.user.id);
+    assert(live === 0, `${String(live)} tokens survived a detected reuse`);
+  });
+
+  await check('two sign-ups for the same email at once create one account', async () => {
+    const raceEmail = `race-signup-${stamp}@example.test`;
+
+    const results = await Promise.allSettled(
+      Array.from({ length: 4 }, () =>
+        auth.register({ email: raceEmail, password: PASSWORD, name: 'Twin' }, DEVICE),
+      ),
+    );
+
+    for (const r of results) {
+      if (r.status === 'fulfilled') createdUserIds.push(r.value.user.id);
+    }
+
+    const accounts = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, raceEmail));
+    for (const a of accounts) if (!createdUserIds.includes(a.id)) createdUserIds.push(a.id);
+
+    assert(accounts.length === 1, `${String(accounts.length)} accounts exist for one email`);
+
+    const refused = results.filter((r) => r.status === 'rejected');
+    assert(refused.length === 3, `${String(refused.length)} of the duplicates were refused`);
+    for (const r of refused) {
+      const reason = r.reason as unknown;
+      assert(
+        reason instanceof HttpError && reason.code === 'email_taken',
+        `a duplicate failed with ${String(reason)} rather than email_taken`,
+      );
+    }
   });
 
   /* ---------------- cleanup ---------------- */
 
   process.stdout.write(`\n${D}Cleaning up...${X}\n`);
-  await RefreshToken.deleteMany({ userId: { $in: createdUserIds } });
-  await User.deleteMany({ _id: { $in: createdUserIds } });
+  // Refresh tokens and linked identities go with their user, by cascade.
+  if (createdUserIds.length > 0) {
+    await db.delete(users).where(inArray(users.id, createdUserIds));
+  }
 
   process.stdout.write(
     `\n  ${passed > 0 ? G : D}${passed} passed${X}` +

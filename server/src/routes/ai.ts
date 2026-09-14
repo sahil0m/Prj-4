@@ -2,7 +2,6 @@ import { Router } from 'express';
 import multer from 'multer';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
-import { Session, Response } from '../models/index.js';
 import { HttpError } from '../app.js';
 import { requireAuth, type AuthedRequest } from '../middleware/requireAuth.js';
 import * as ai from '../services/ai/features.js';
@@ -189,13 +188,13 @@ export function aiRoutes(): Router {
         const deck = await decks.createDeck(ownerId, { title: generated.title });
 
         for (const slide of generated.slides) {
-          await decks.addSlide(deck._id.toString(), ownerId, {
+          await decks.addSlide(deck.id, ownerId, {
             kind: slide.kind,
             config: slide.config,
           });
         }
 
-        const complete = await decks.getDeck(deck._id.toString(), ownerId);
+        const complete = await decks.getDeck(deck.id, ownerId);
         res.status(201).json({ deck: decks.toPublicDeck(complete), provider: generated.provider });
       } catch (err) {
         next(err);
@@ -235,7 +234,7 @@ export function aiRoutes(): Router {
       try {
         const { sessionId, slideId } = zSummarise.parse(req.body);
 
-        const session = await Session.findOne({ _id: sessionId, ownerId: ownerOf(req) });
+        const session = await sessions.findOwnedSession(sessionId, ownerOf(req));
         if (!session) {
           throw new HttpError(404, 'That session was not found.', 'session_not_found');
         }
@@ -243,9 +242,7 @@ export function aiRoutes(): Router {
         const slide = sessions.slideOf(session, slideId);
         if (!slide) throw new HttpError(404, 'That slide was not found.', 'slide_not_found');
 
-        const rows = await Response.find({ sessionId: session._id, slideId, deletedAt: null })
-          .select('payload')
-          .lean();
+        const rows = await sessions.liveAnswers(session.id, slideId);
 
         const answers = rows
           .map((row) => {

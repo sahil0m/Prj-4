@@ -464,23 +464,38 @@ export interface QuotaState {
  * arriving together cannot both read the same count and both pass.
  */
 export async function consumeQuota(userId: string): Promise<QuotaState> {
-  const { User } = await import('../../models/index.js');
+  // Loaded when first needed rather than at the top of the file: the unit
+  // tests import this module, and a static import would make them need a
+  // configured database just to test prompt handling.
+  const { db } = await import('../../lib/db.js');
+  const { users } = await import('../../db/schema.js');
+  const { isId } = await import('../../db/ids.js');
+  const { and, eq, or, lt, isNull, sql } = await import('drizzle-orm');
 
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
 
-  // Reset first, in its own conditional update: a user whose window has
-  // rolled over starts the day at zero without a separate read.
-  await User.updateOne(
-    { _id: userId, $or: [{ aiRequestsResetAt: null }, { aiRequestsResetAt: { $lt: startOfDay } }] },
-    { $set: { aiRequestsToday: 0, aiRequestsResetAt: new Date() } },
-  );
+  const stale = or(isNull(users.aiRequestsResetAt), lt(users.aiRequestsResetAt, startOfDay));
 
-  const updated = await User.findOneAndUpdate(
-    { _id: userId, aiRequestsToday: { $lt: DAILY_AI_LIMIT } },
-    { $inc: { aiRequestsToday: 1 } },
-    { new: true, projection: { aiRequestsToday: 1 } },
-  ).lean();
+  /*
+   * One statement that both rolls the day over and counts the request.
+   *
+   * Reading the count and then writing it back would let two requests
+   * arriving together both see 9 of 10 and both pass. Resetting in one
+   * statement and incrementing in another leaves a smaller gap of the same
+   * kind. Here the condition and the change are evaluated together, so the
+   * limit holds however many requests arrive at once.
+   */
+  const [updated] = isId(userId)
+    ? await db
+        .update(users)
+        .set({
+          aiRequestsToday: sql`CASE WHEN ${stale} THEN 1 ELSE ${users.aiRequestsToday} + 1 END`,
+          aiRequestsResetAt: sql`CASE WHEN ${stale} THEN now() ELSE ${users.aiRequestsResetAt} END`,
+        })
+        .where(and(eq(users.id, userId), or(stale, lt(users.aiRequestsToday, DAILY_AI_LIMIT))))
+        .returning({ aiRequestsToday: users.aiRequestsToday })
+    : [];
 
   if (!updated) {
     throw new HttpError(
@@ -496,14 +511,24 @@ export async function consumeQuota(userId: string): Promise<QuotaState> {
 
 /** The user's current allowance, without spending any of it. */
 export async function quotaFor(userId: string): Promise<QuotaState> {
-  const { User } = await import('../../models/index.js');
+  const { db } = await import('../../lib/db.js');
+  const { users } = await import('../../db/schema.js');
+  const { isId } = await import('../../db/ids.js');
+  const { eq } = await import('drizzle-orm');
 
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
 
-  const user = await User.findById(userId).select('aiRequestsToday aiRequestsResetAt').lean();
+  const [user] = isId(userId)
+    ? await db
+        .select({
+          aiRequestsToday: users.aiRequestsToday,
+          aiRequestsResetAt: users.aiRequestsResetAt,
+        })
+        .from(users)
+        .where(eq(users.id, userId))
+    : [];
 
-  // A stale window means the count belongs to a previous day.
   // A missing user cannot have spent anything; a stale window means the
   // count belongs to a previous day.
   const resetAt = user?.aiRequestsResetAt ?? null;

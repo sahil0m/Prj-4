@@ -19,6 +19,7 @@ export const logger = pino({
       'authorization',
       'req.headers.authorization',
       'req.headers.cookie',
+      'DATABASE_URL',
       'MONGODB_URI',
       'AUTH_SECRET',
       'PRESENTER_TOKEN_SECRET',

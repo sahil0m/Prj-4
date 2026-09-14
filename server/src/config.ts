@@ -17,12 +17,16 @@ const zEnv = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65535).default(4000),
 
-  MONGODB_URI: z
+  /**
+   * PostgreSQL, as a connection URL:
+   * postgresql://user:password@localhost:5432/pulse
+   */
+  DATABASE_URL: z
     .string()
-    .min(1, 'MONGODB_URI is required')
+    .min(1, 'DATABASE_URL is required')
     .refine(
-      (v) => v.startsWith('mongodb://') || v.startsWith('mongodb+srv://'),
-      'MONGODB_URI must start with mongodb:// or mongodb+srv://',
+      (v) => v.startsWith('postgres://') || v.startsWith('postgresql://'),
+      'DATABASE_URL must start with postgres:// or postgresql://',
     ),
 
   AUTH_SECRET: z

@@ -1,5 +1,20 @@
-import { Types } from 'mongoose';
-import { User, Deck, Session, Response, Participant } from '../models/index.js';
+import {
+  and,
+  count,
+  desc,
+  eq,
+  ilike,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  or,
+  sql,
+  type SQL,
+} from 'drizzle-orm';
+import { db } from '../lib/db.js';
+import { isId } from '../db/ids.js';
+import { users, userIdentities, decks, sessions, responses, type User } from '../db/schema.js';
 import { HttpError } from '../app.js';
 import { logger } from '../lib/logger.js';
 import { pingDb } from '../lib/db.js';
@@ -9,8 +24,8 @@ import { availableProviders, isAiConfigured } from './ai/providers.js';
  * The admin view.
  *
  * Deliberately small. An admin of this system needs to answer four
- * questions — who is using it, is anyone abusing it, is the free AI quota
- * about to run out, and is anything broken — and every screen here exists
+ * questions -- who is using it, is anyone abusing it, is the free AI quota
+ * about to run out, and is anything broken -- and every screen here exists
  * to answer one of them. Screens nobody opens are a maintenance cost, not a
  * feature.
  */
@@ -26,63 +41,62 @@ export interface AdminOverview {
   health: { database: { ok: boolean; latencyMs: number }; uptimeSeconds: number };
 }
 
+/** A count as a plain number; Postgres returns count(*) as a bigint. */
+const countOf = sql<number>`count(*)::int`;
+
 export async function overview(): Promise<AdminOverview> {
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
-  // Counted in parallel: these are independent, and an admin page that takes
-  // a second to load gets reloaded impatiently, multiplying the cost.
-  const [
-    totalUsers,
-    activeUsers,
-    newUsers,
-    suspendedUsers,
-    decks,
-    totalSessions,
-    liveSessions,
-    responses,
-    aiToday,
-    database,
-  ] = await Promise.all([
-    User.countDocuments({ deletedAt: null }),
-    User.countDocuments({ deletedAt: null, lastSeenAt: { $gte: weekAgo } }),
-    User.countDocuments({ deletedAt: null, createdAt: { $gte: weekAgo } }),
-    User.countDocuments({ deletedAt: null, suspendedAt: { $ne: null } }),
-    Deck.countDocuments({ deletedAt: null }),
-    Session.countDocuments({}),
-    Session.countDocuments({ state: { $in: ['live', 'paused'] } }),
-    Response.countDocuments({ deletedAt: null }),
-    sumAiRequestsToday(),
-    pingDb(),
-  ]);
-
-  return {
-    users: {
-      total: totalUsers,
-      active7d: activeUsers,
-      newThisWeek: newUsers,
-      suspended: suspendedUsers,
-    },
-    content: { decks, sessions: totalSessions, liveSessions, responses },
-    ai: {
-      configured: isAiConfigured(),
-      providers: availableProviders(),
-      requestsToday: aiToday,
-    },
-    health: { database, uptimeSeconds: Math.round(process.uptime()) },
-  };
-}
-
-/** Total AI calls today, across everyone sharing the free quota. */
-async function sumAiRequestsToday(): Promise<number> {
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
 
-  const result = await User.aggregate<{ total: number }>([
-    { $match: { aiRequestsResetAt: { $gte: startOfDay } } },
-    { $group: { _id: null, total: { $sum: '$aiRequestsToday' } } },
+  // Filtered aggregates: every user figure in one pass over the table rather
+  // than four separate counts, and likewise for sessions.
+  const [userStats, deckStats, sessionStats, responseStats, database] = await Promise.all([
+    db
+      .select({
+        total: countOf,
+        active7d: sql<number>`count(*) FILTER (WHERE ${users.lastSeenAt} >= ${weekAgo})::int`,
+        newThisWeek: sql<number>`count(*) FILTER (WHERE ${users.createdAt} >= ${weekAgo})::int`,
+        suspended: sql<number>`count(*) FILTER (WHERE ${users.suspendedAt} IS NOT NULL)::int`,
+        aiToday: sql<number>`COALESCE(sum(${users.aiRequestsToday}) FILTER (WHERE ${users.aiRequestsResetAt} >= ${startOfDay}), 0)::int`,
+      })
+      .from(users)
+      .where(isNull(users.deletedAt)),
+    db.select({ total: countOf }).from(decks).where(isNull(decks.deletedAt)),
+    db
+      .select({
+        total: countOf,
+        live: sql<number>`count(*) FILTER (WHERE ${sessions.state} IN ('live', 'paused'))::int`,
+      })
+      .from(sessions),
+    db.select({ total: countOf }).from(responses).where(isNull(responses.deletedAt)),
+    pingDb(),
   ]);
 
-  return result[0]?.total ?? 0;
+  const u = userStats[0];
+  const s = sessionStats[0];
+
+  return {
+    users: {
+      total: u?.total ?? 0,
+      active7d: u?.active7d ?? 0,
+      newThisWeek: u?.newThisWeek ?? 0,
+      suspended: u?.suspended ?? 0,
+    },
+    content: {
+      decks: deckStats[0]?.total ?? 0,
+      sessions: s?.total ?? 0,
+      liveSessions: s?.live ?? 0,
+      responses: responseStats[0]?.total ?? 0,
+    },
+    ai: {
+      configured: isAiConfigured(),
+      providers: availableProviders(),
+      requestsToday: u?.aiToday ?? 0,
+    },
+    health: { database, uptimeSeconds: Math.round(process.uptime()) },
+  };
 }
 
 /* ------------------------------------------------------------------ */
@@ -105,6 +119,11 @@ export interface AdminUser {
   lastSeenAt: Date | null;
 }
 
+/** Escapes LIKE's wildcards, so searching for "a_b" means those characters. */
+function likeLiteral(text: string): string {
+  return text.replace(/[\\%_]/g, (character) => `\\${character}`);
+}
+
 export async function listUsers(options: {
   search?: string;
   suspendedOnly?: boolean;
@@ -113,76 +132,92 @@ export async function listUsers(options: {
 }): Promise<{ users: AdminUser[]; nextCursor: string | null }> {
   const limit = Math.min(Math.max(options.limit ?? 50, 1), 200);
 
-  const filter: Record<string, unknown> = { deletedAt: null };
+  const conditions: SQL[] = [isNull(users.deletedAt)];
 
-  if (options.suspendedOnly) filter.suspendedAt = { $ne: null };
+  if (options.suspendedOnly) conditions.push(isNotNull(users.suspendedAt));
 
   const search = options.search?.trim();
   if (search) {
-    // Escaped, or a search for ".*" would match every user.
-    const safe = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    filter.$or = [
-      { email: { $regex: safe, $options: 'i' } },
-      { name: { $regex: safe, $options: 'i' } },
-    ];
+    const pattern = `%${likeLiteral(search)}%`;
+    const match = or(ilike(users.email, pattern), ilike(users.name, pattern));
+    if (match) conditions.push(match);
   }
 
-  // Keyset pagination on _id: a skip/limit page shifts under you as rows are
-  // added, showing the same user twice or missing one entirely.
-  if (options.cursor && Types.ObjectId.isValid(options.cursor)) {
-    filter._id = { $lt: new Types.ObjectId(options.cursor) };
-  }
+  // Keyset pagination on id, which sorts by creation time: an offset page
+  // shifts under you as rows are added, showing the same user twice or
+  // missing one entirely.
+  if (options.cursor && isId(options.cursor)) conditions.push(lt(users.id, options.cursor));
 
-  const rows = await User.find(filter)
-    .select(
-      'email name role identities emailVerifiedAt suspendedAt suspendedReason aiRequestsToday createdAt lastSeenAt',
-    )
-    .sort({ _id: -1 })
-    .limit(limit + 1)
-    .lean();
+  const rows = await db
+    .select({
+      id: users.id,
+      email: users.email,
+      name: users.name,
+      role: users.role,
+      emailVerifiedAt: users.emailVerifiedAt,
+      suspendedAt: users.suspendedAt,
+      suspendedReason: users.suspendedReason,
+      aiRequestsToday: users.aiRequestsToday,
+      createdAt: users.createdAt,
+      lastSeenAt: users.lastSeenAt,
+    })
+    .from(users)
+    .where(and(...conditions))
+    .orderBy(desc(users.id))
+    .limit(limit + 1);
 
   const hasMore = rows.length > limit;
   const page = hasMore ? rows.slice(0, limit) : rows;
+  const ids = page.map((user) => user.id);
 
-  // Counts for the whole page in two queries rather than two per user.
-  const ids = page.map((user) => user._id);
+  if (ids.length === 0) return { users: [], nextCursor: null };
 
-  const [deckCounts, sessionCounts] = await Promise.all([
-    Deck.aggregate<{ _id: Types.ObjectId; count: number }>([
-      { $match: { ownerId: { $in: ids }, deletedAt: null } },
-      { $group: { _id: '$ownerId', count: { $sum: 1 } } },
-    ]),
-    Session.aggregate<{ _id: Types.ObjectId; count: number }>([
-      { $match: { ownerId: { $in: ids } } },
-      { $group: { _id: '$ownerId', count: { $sum: 1 } } },
-    ]),
+  // Everything else for the whole page in three queries, not three per user.
+  const [deckCounts, sessionCounts, identities] = await Promise.all([
+    db
+      .select({ ownerId: decks.ownerId, value: count() })
+      .from(decks)
+      .where(and(inArray(decks.ownerId, ids), isNull(decks.deletedAt)))
+      .groupBy(decks.ownerId),
+    db
+      .select({ ownerId: sessions.ownerId, value: count() })
+      .from(sessions)
+      .where(inArray(sessions.ownerId, ids))
+      .groupBy(sessions.ownerId),
+    db
+      .select({ userId: userIdentities.userId, provider: userIdentities.provider })
+      .from(userIdentities)
+      .where(inArray(userIdentities.userId, ids)),
   ]);
 
-  const decksBy = new Map(deckCounts.map((row) => [row._id.toString(), row.count]));
-  const sessionsBy = new Map(sessionCounts.map((row) => [row._id.toString(), row.count]));
+  const decksBy = new Map(deckCounts.map((row) => [row.ownerId, row.value]));
+  const sessionsBy = new Map(sessionCounts.map((row) => [row.ownerId, row.value]));
+
+  const providersBy = new Map<string, string[]>();
+  for (const identity of identities) {
+    providersBy.set(identity.userId, [
+      ...(providersBy.get(identity.userId) ?? []),
+      identity.provider,
+    ]);
+  }
 
   return {
-    users: page.map((user) => {
-      const id = user._id.toString();
-      return {
-        id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        providers: user.identities.map((identity) => identity.provider),
-        emailVerified: user.emailVerifiedAt !== null,
-        suspended: user.suspendedAt !== null,
-        suspendedReason: user.suspendedReason,
-        deckCount: decksBy.get(id) ?? 0,
-        sessionCount: sessionsBy.get(id) ?? 0,
-        aiRequestsToday: user.aiRequestsToday,
-        createdAt: user.createdAt,
-        // Mongoose types a null-defaulted path as possibly undefined; the
-        // wire format has only null.
-        lastSeenAt: user.lastSeenAt ?? null,
-      };
-    }),
-    nextCursor: hasMore ? (page[page.length - 1]?._id.toString() ?? null) : null,
+    users: page.map((user) => ({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      providers: providersBy.get(user.id) ?? [],
+      emailVerified: user.emailVerifiedAt !== null,
+      suspended: user.suspendedAt !== null,
+      suspendedReason: user.suspendedReason,
+      deckCount: decksBy.get(user.id) ?? 0,
+      sessionCount: sessionsBy.get(user.id) ?? 0,
+      aiRequestsToday: user.aiRequestsToday,
+      createdAt: user.createdAt,
+      lastSeenAt: user.lastSeenAt,
+    })),
+    nextCursor: hasMore ? (page[page.length - 1]?.id ?? null) : null,
   };
 }
 
@@ -217,11 +252,14 @@ export async function setSuspended(
     );
   }
 
-  user.suspendedAt = suspended ? new Date() : null;
-  user.suspendedReason = suspended ? reason.slice(0, 300) : '';
-  if (suspended) user.tokenVersion += 1;
-
-  await user.save();
+  await db
+    .update(users)
+    .set({
+      suspendedAt: suspended ? new Date() : null,
+      suspendedReason: suspended ? reason.slice(0, 300) : '',
+      ...(suspended ? { tokenVersion: sql`${users.tokenVersion} + 1` } : {}),
+    })
+    .where(eq(users.id, user.id));
 
   logger.warn(
     { actorId, userId, suspended, reason },
@@ -245,20 +283,21 @@ export async function setRole(
   }
 
   const user = await findUser(userId);
-  user.role = role;
-  await user.save();
+  await db.update(users).set({ role }).where(eq(users.id, user.id));
 
   logger.warn({ actorId, userId, role }, 'Role changed');
 }
 
-async function findUser(userId: string) {
-  if (!Types.ObjectId.isValid(userId)) {
-    throw new HttpError(404, 'That account was not found.', 'user_not_found');
-  }
+async function findUser(userId: string): Promise<Pick<User, 'id' | 'role'>> {
+  const notFound = () => new HttpError(404, 'That account was not found.', 'user_not_found');
+  if (!isId(userId)) throw notFound();
 
-  const user = await User.findOne({ _id: userId, deletedAt: null });
-  if (!user) throw new HttpError(404, 'That account was not found.', 'user_not_found');
+  const [user] = await db
+    .select({ id: users.id, role: users.role })
+    .from(users)
+    .where(and(eq(users.id, userId), isNull(users.deletedAt)));
 
+  if (!user) throw notFound();
   return user;
 }
 
@@ -280,48 +319,45 @@ export interface AdminSession {
 
 /** What is running right now, so an admin can see load as it happens. */
 export async function liveSessions(): Promise<AdminSession[]> {
-  const sessions = await Session.find({ state: { $in: ['live', 'paused'] } })
-    .select('title joinCode ownerId state stats startedAt')
-    .sort({ startedAt: -1 })
-    .limit(100)
-    .lean();
+  /*
+   * Counted live rather than read from the cached counters, which can drift
+   * if a process died mid-session -- and an admin screen showing a wrong
+   * number is worse than one that takes a moment longer. One query for the
+   * whole list, where the old version made two per session.
+   */
+  const rows = await db
+    .select({
+      id: sessions.id,
+      title: sessions.title,
+      joinCode: sessions.joinCode,
+      state: sessions.state,
+      startedAt: sessions.startedAt,
+      ownerName: users.name,
+      ownerEmail: users.email,
+      participants: sql<number>`(
+        SELECT count(*)::int FROM participants p
+        WHERE p.session_id = ${sessions.id} AND p.blocked_at IS NULL
+      )`,
+      responses: sql<number>`(
+        SELECT count(*)::int FROM responses r
+        WHERE r.session_id = ${sessions.id} AND r.deleted_at IS NULL
+      )`,
+    })
+    .from(sessions)
+    .leftJoin(users, eq(users.id, sessions.ownerId))
+    .where(inArray(sessions.state, ['live', 'paused']))
+    .orderBy(desc(sessions.startedAt))
+    .limit(100);
 
-  if (sessions.length === 0) return [];
-
-  const owners = await User.find({ _id: { $in: sessions.map((s) => s.ownerId) } })
-    .select('name email')
-    .lean();
-
-  const ownerBy = new Map(owners.map((owner) => [owner._id.toString(), owner]));
-
-  // Counted live rather than read from stats: the cached counter can drift
-  // if a process died mid-session, and an admin screen showing a wrong
-  // number is worse than one that takes a moment longer.
-  const counts = await Promise.all(
-    sessions.map(async (session) => ({
-      id: session._id.toString(),
-      participants: await Participant.countDocuments({ sessionId: session._id, blockedAt: null }),
-      responses: await Response.countDocuments({ sessionId: session._id, deletedAt: null }),
-    })),
-  );
-
-  const countBy = new Map(counts.map((row) => [row.id, row]));
-
-  return sessions.map((session) => {
-    const id = session._id.toString();
-    const owner = ownerBy.get((session.ownerId as Types.ObjectId).toString());
-    const count = countBy.get(id);
-
-    return {
-      id,
-      title: session.title,
-      joinCode: session.joinCode,
-      ownerName: owner?.name ?? 'Unknown',
-      ownerEmail: owner?.email ?? '',
-      state: session.state,
-      participants: count?.participants ?? 0,
-      responses: count?.responses ?? 0,
-      startedAt: session.startedAt,
-    };
-  });
+  return rows.map((row) => ({
+    id: row.id,
+    title: row.title,
+    joinCode: row.joinCode,
+    ownerName: row.ownerName ?? 'Unknown',
+    ownerEmail: row.ownerEmail ?? '',
+    state: row.state,
+    participants: row.participants,
+    responses: row.responses,
+    startedAt: row.startedAt,
+  }));
 }

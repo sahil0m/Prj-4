@@ -1,13 +1,16 @@
 /**
  * Deck service checks, run against the real database.
  *
- * These cover the things unit tests with a mocked model cannot: that
+ * These cover the things unit tests with a mocked database cannot: that
  * ownership scoping really excludes other people's rows, that fractional
- * positions survive repeated inserts, and that Mongoose persists what we
- * think it does.
+ * positions survive repeated inserts, that PostgreSQL persists what we
+ * think it does, and that edits arriving at the same moment all survive.
  */
 import { connectDb, disconnectDb } from '../lib/db.js';
-import { Deck, User } from '../models/index.js';
+import { eq, inArray } from 'drizzle-orm';
+import { db } from '../lib/db.js';
+import { newId } from '../db/ids.js';
+import { users, decks as deckTable } from '../db/schema.js';
 import { HttpError } from '../app.js';
 import * as decks from '../services/decks.js';
 import type { SlideKind } from '@pulse/shared';
@@ -59,19 +62,23 @@ async function main(): Promise<void> {
   const stamp = Date.now();
   process.stdout.write(`\n${D}Deck service checks${X}\n\n`);
 
-  const owner = await User.create({
-    email: `deck-owner-${stamp}@example.test`,
-    name: 'Deck Owner',
-    passwordHash: 'x'.repeat(20),
-  });
-  const stranger = await User.create({
-    email: `deck-stranger-${stamp}@example.test`,
-    name: 'Stranger',
-    passwordHash: 'x'.repeat(20),
-  });
+  const ownerId = newId();
+  const strangerId = newId();
 
-  const ownerId = owner._id.toString();
-  const strangerId = stranger._id.toString();
+  await db.insert(users).values([
+    {
+      id: ownerId,
+      email: `deck-owner-${stamp}@example.test`,
+      name: 'Deck Owner',
+      passwordHash: 'x'.repeat(20),
+    },
+    {
+      id: strangerId,
+      email: `deck-stranger-${stamp}@example.test`,
+      name: 'Stranger',
+      passwordHash: 'x'.repeat(20),
+    },
+  ]);
 
   /* ---------------- create and list ---------------- */
 
@@ -79,7 +86,7 @@ async function main(): Promise<void> {
 
   await check('a new deck starts empty with a default title', async () => {
     const deck = await decks.createDeck(ownerId, {});
-    deckId = deck._id.toString();
+    deckId = deck.id;
     assert(deck.title === 'Untitled deck', `title was ${deck.title}`);
     assert(deck.slides.length === 0, 'new deck should have no slides');
     assert(deck.revision === 1, 'revision should start at 1');
@@ -266,7 +273,7 @@ async function main(): Promise<void> {
   // to a quiz slide wiped its options and then failed validation.
   await check('a partial edit keeps the fields it did not mention', async () => {
     const fresh = await decks.createDeck(ownerId, { slideKinds: ['quiz_select'] });
-    const id = fresh._id.toString();
+    const id = fresh.id;
     const slide = decks.toPublicDeck(fresh).slides[0];
     assert(slide, 'setup failed');
 
@@ -287,7 +294,7 @@ async function main(): Promise<void> {
 
   await check('an edit can still replace a list outright', async () => {
     const fresh = await decks.createDeck(ownerId, { slideKinds: ['multiple_choice'] });
-    const id = fresh._id.toString();
+    const id = fresh.id;
     const slide = decks.toPublicDeck(fresh).slides[0];
     assert(slide, 'setup failed');
 
@@ -306,7 +313,7 @@ async function main(): Promise<void> {
 
   await check('a partial edit cannot smuggle in an invalid value', async () => {
     const fresh = await decks.createDeck(ownerId, { slideKinds: ['word_cloud'] });
-    const id = fresh._id.toString();
+    const id = fresh.id;
     const slide = decks.toPublicDeck(fresh).slides[0];
     assert(slide, 'setup failed');
 
@@ -398,7 +405,7 @@ async function main(): Promise<void> {
     // Fractional positioning halves the gap each time. This is the case that
     // eventually exhausts float precision, so the service renumbers.
     const fresh = await decks.createDeck(ownerId, { slideKinds: ['heading', 'heading'] });
-    const id = fresh._id.toString();
+    const id = fresh.id;
 
     const start = await orderOf(id, ownerId);
     const anchor = start[0];
@@ -453,7 +460,7 @@ async function main(): Promise<void> {
 
   await check('editing a copy does not change the original', async () => {
     const copy = await decks.duplicateDeck(deckId, ownerId);
-    const copyId = copy._id.toString();
+    const copyId = copy.id;
     const slide = decks.toPublicDeck(copy).slides[0];
     assert(slide, 'setup failed');
 
@@ -466,7 +473,7 @@ async function main(): Promise<void> {
 
   await check('an archived deck leaves the default listing', async () => {
     const target = await decks.createDeck(ownerId, { title: `Archive me ${stamp}` });
-    const id = target._id.toString();
+    const id = target.id;
 
     await decks.archiveDeck(id, ownerId, true);
 
@@ -482,7 +489,7 @@ async function main(): Promise<void> {
 
   await check('a deleted deck disappears but is not destroyed', async () => {
     const target = await decks.createDeck(ownerId, { title: 'Delete me' });
-    const id = target._id.toString();
+    const id = target.id;
 
     await decks.deleteDeck(id, ownerId);
 
@@ -491,8 +498,8 @@ async function main(): Promise<void> {
 
     await expectFailure(() => decks.getDeck(id, ownerId), 'deck_not_found');
 
-    const raw = await Deck.findById(id).lean();
-    assert(raw !== null, 'the row was hard-deleted');
+    const [raw] = await db.select().from(deckTable).where(eq(deckTable.id, id));
+    assert(raw !== undefined, 'the row was hard-deleted');
     assert(raw.deletedAt !== null, 'deletedAt was not set');
   });
 
@@ -511,11 +518,45 @@ async function main(): Promise<void> {
     assert(deck.title === 'Untitled deck', `title became "${deck.title}"`);
   });
 
+  /* ---------------- concurrency ---------------- */
+
+  await check('slides added at the same moment are all kept', async () => {
+    // Every edit reads the deck, changes it and writes it back. Without the
+    // row lock, simultaneous edits each start from the same version and the
+    // last write silently discards the others' slides.
+    const target = await decks.createDeck(ownerId, { title: 'Busy deck' });
+
+    await Promise.all(
+      Array.from({ length: 10 }, () => decks.addSlide(target.id, ownerId, { kind: 'word_cloud' })),
+    );
+
+    const after = await decks.getDeck(target.id, ownerId);
+    assert(after.slides.length === 10, `${String(after.slides.length)} of 10 slides survived`);
+    assert(after.revision === 11, `revision is ${String(after.revision)}, expected 11`);
+  });
+
+  await check('two panels saving different fields at once both keep their change', async () => {
+    const target = await decks.createDeck(ownerId, {
+      title: 'Two panels',
+      slideKinds: ['open_text'],
+    });
+    const slideId = target.slides[0]?.id ?? '';
+
+    await Promise.all([
+      decks.updateSlide(target.id, ownerId, slideId, { prompt: 'From the first panel' }),
+      decks.updateSlide(target.id, ownerId, slideId, { subtitle: 'From the second panel' }),
+    ]);
+
+    const slide = (await decks.getDeck(target.id, ownerId)).slides[0];
+    assert(slide?.config.prompt === 'From the first panel', 'the first panel lost its change');
+    assert(slide.config.subtitle === 'From the second panel', 'the second panel lost its change');
+  });
+
   /* ---------------- cleanup ---------------- */
 
   process.stdout.write(`\n${D}Cleaning up...${X}\n`);
-  await Deck.deleteMany({ ownerId: { $in: [owner._id, stranger._id] } });
-  await User.deleteMany({ _id: { $in: [owner._id, stranger._id] } });
+  // Their decks go with them, by cascade.
+  await db.delete(users).where(inArray(users.id, [ownerId, strangerId]));
 
   const summary =
     failed === 0 ? `${G}${passed} passed${X}` : `${R}${failed} failed${X}, ${passed} passed`;

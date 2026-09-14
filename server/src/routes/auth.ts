@@ -220,8 +220,7 @@ export function authRoutes(): Router {
   router.get('/me', requireAuth, (req, res, next) => {
     void (async () => {
       try {
-        const { User } = await import('../models/index.js');
-        const user = await User.findById((req as AuthedRequest).user.id).select('+passwordHash');
+        const user = await auth.getAccount((req as AuthedRequest).user.id);
         if (!user) throw new HttpError(404, 'Account not found.', 'user_not_found');
         res.json({ user: auth.toPublicUser(user) });
       } catch (err) {

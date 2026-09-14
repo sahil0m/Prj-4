@@ -1,7 +1,9 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import type { Types } from 'mongoose';
-import { Session, Participant, Response } from '../models/index.js';
+import { and, desc, eq, gte, lte, sql, type SQL } from 'drizzle-orm';
+import { db } from '../lib/db.js';
+import { isId } from '../db/ids.js';
+import { sessions as sessionsTable, type Session } from '../db/schema.js';
 import { requireAuth, type AuthedRequest } from '../middleware/requireAuth.js';
 import * as sessions from '../services/sessions.js';
 import * as exports from '../services/export.js';
@@ -80,8 +82,17 @@ export function sessionRoutes(): Router {
           })
           .parse(req.query);
 
-        const filter: Record<string, unknown> = { ownerId: ownerOf(req) };
-        if (query.deckId) filter.deckId = query.deckId;
+        const conditions: SQL[] = [eq(sessionsTable.ownerId, ownerOf(req))];
+
+        // A malformed deck id matches nothing, rather than being ignored and
+        // returning every session as if no filter had been asked for.
+        if (query.deckId) {
+          if (!isId(query.deckId)) {
+            res.json({ sessions: [] });
+            return;
+          }
+          conditions.push(eq(sessionsTable.deckId, query.deckId));
+        }
 
         /*
          * Both ends inclusive, and read in the server's timezone.
@@ -90,44 +101,45 @@ export function sessionRoutes(): Router {
          * midnight: someone filtering to today and seeing nothing from
          * this morning would reasonably conclude the filter is broken.
          */
-        if (query.from ?? query.to) {
-          const range: Record<string, Date> = {};
-          if (query.from) range.$gte = new Date(`${query.from}T00:00:00`);
-          if (query.to) range.$lte = new Date(`${query.to}T23:59:59.999`);
-          filter.startedAt = range;
+        if (query.from) {
+          conditions.push(gte(sessionsTable.startedAt, new Date(`${query.from}T00:00:00`)));
+        }
+        if (query.to) {
+          conditions.push(lte(sessionsTable.startedAt, new Date(`${query.to}T23:59:59.999`)));
         }
 
-        const rows = await Session.find(filter)
-          .select('deckId title joinCode state stats startedAt endedAt')
-          .sort({ startedAt: -1 })
-          .limit(query.limit)
-          .lean();
+        /*
+         * Counted for real rather than read from the cached counters, which
+         * can drift if a process died mid-session; a history page showing a
+         * wrong number is worse than one that takes a moment longer.
+         *
+         * One query for the whole page. Counting per session was two round
+         * trips a row -- two hundred for a full page.
+         */
+        const rows = await db
+          .select({
+            id: sessionsTable.id,
+            deckId: sessionsTable.deckId,
+            title: sessionsTable.title,
+            joinCode: sessionsTable.joinCode,
+            state: sessionsTable.state,
+            startedAt: sessionsTable.startedAt,
+            endedAt: sessionsTable.endedAt,
+            participants: sql<number>`(
+              SELECT count(*)::int FROM participants p
+              WHERE p.session_id = ${sessionsTable.id} AND p.blocked_at IS NULL
+            )`,
+            responses: sql<number>`(
+              SELECT count(*)::int FROM responses r
+              WHERE r.session_id = ${sessionsTable.id} AND r.deleted_at IS NULL
+            )`,
+          })
+          .from(sessionsTable)
+          .where(and(...conditions))
+          .orderBy(desc(sessionsTable.startedAt))
+          .limit(query.limit);
 
-        // Counted for real rather than read from the cached stats, which can
-        // drift if a process died mid-session; a history page showing a
-        // wrong number is worse than one that takes a moment longer.
-        const sessions = await Promise.all(
-          rows.map(async (row) => {
-            const [participants, responses] = await Promise.all([
-              Participant.countDocuments({ sessionId: row._id, blockedAt: null }),
-              Response.countDocuments({ sessionId: row._id, deletedAt: null }),
-            ]);
-
-            return {
-              id: row._id.toString(),
-              deckId: (row.deckId as Types.ObjectId).toString(),
-              title: row.title,
-              joinCode: row.joinCode,
-              state: row.state,
-              participants,
-              responses,
-              startedAt: row.startedAt,
-              endedAt: row.endedAt,
-            };
-          }),
-        );
-
-        res.json({ sessions });
+        res.json({ sessions: rows });
       } catch (err) {
         next(err);
       }
@@ -149,10 +161,7 @@ export function sessionRoutes(): Router {
   router.get('/:sessionId', (req, res, next) => {
     void (async () => {
       try {
-        const session = await Session.findOne({
-          _id: req.params.sessionId,
-          ownerId: ownerOf(req),
-        });
+        const session = await sessions.findOwnedSession(req.params.sessionId, ownerOf(req));
 
         if (!session) {
           res.status(404).json({ error: 'That session was not found.', code: 'session_not_found' });
@@ -181,10 +190,7 @@ export function sessionRoutes(): Router {
   router.get('/:sessionId/slides/:slideId/results', (req, res, next) => {
     void (async () => {
       try {
-        const session = await Session.findOne({
-          _id: req.params.sessionId,
-          ownerId: ownerOf(req),
-        });
+        const session = await sessions.findOwnedSession(req.params.sessionId, ownerOf(req));
 
         if (!session) {
           res.status(404).json({ error: 'That session was not found.', code: 'session_not_found' });
@@ -219,10 +225,7 @@ export function sessionRoutes(): Router {
           .object({ format: z.enum(['csv', 'leaderboard', 'json']).default('csv') })
           .parse(req.query);
 
-        const session = await Session.findOne({
-          _id: req.params.sessionId,
-          ownerId: ownerOf(req),
-        });
+        const session = await sessions.findOwnedSession(req.params.sessionId, ownerOf(req));
 
         if (!session) {
           res.status(404).json({ error: 'That session was not found.', code: 'session_not_found' });
@@ -257,11 +260,11 @@ export function sessionRoutes(): Router {
   return router;
 }
 
-function toPublicSession(session: Awaited<ReturnType<typeof sessions.startSession>>) {
+function toPublicSession(session: Session) {
   return {
-    id: session._id.toString(),
-    // Never populated on this path, so this is always an ObjectId.
-    deckId: (session.deckId as Types.ObjectId).toString(),
+    id: session.id,
+    // Null once the deck has been deleted and purged; the session outlives it.
+    deckId: session.deckId,
     title: session.title,
     joinCode: session.joinCode,
     joinSlug: session.joinSlug,
@@ -276,7 +279,7 @@ function toPublicSession(session: Awaited<ReturnType<typeof sessions.startSessio
     joinLink: `${joinOrigin()}/?code=${session.joinCode}`,
     state: session.state,
     mode: session.mode,
-    currentSlideId: session.currentSlideId ?? null,
+    currentSlideId: session.currentSlideId,
     participationOpen: session.participationOpen,
     resultsVisible: session.resultsVisible,
     startedAt: session.startedAt,

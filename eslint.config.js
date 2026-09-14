@@ -81,7 +81,7 @@ export default tseslint.config(
         'error',
         { allowNumber: true, allowBoolean: true },
       ],
-      // Mongoose and Zod both legitimately produce deep generic unions.
+      // Drizzle and Zod both legitimately produce deep generic unions.
       '@typescript-eslint/no-unnecessary-type-parameters': 'off',
     },
   },

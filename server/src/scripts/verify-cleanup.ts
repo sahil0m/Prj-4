@@ -5,11 +5,26 @@
  * negative ones: that a deck deleted yesterday survives, that a recent
  * session keeps its answers, and that a live session is left alone. An
  * off-by-one in a retention window is unrecoverable.
+ *
+ * Every row here is created by this script and removed at the end. The job
+ * itself runs against the whole database, exactly as it does on a schedule,
+ * so its rules are checked on the real thing rather than a copy.
+ *
+ *   npm run cleanup:verify -w server
  */
-import { connectDb, disconnectDb } from '../lib/db.js';
-import { Deck, Session, Response, Participant, User, RefreshToken } from '../models/index.js';
+import { count, eq, inArray } from 'drizzle-orm';
+import { connectDb, disconnectDb, db } from '../lib/db.js';
+import { newId } from '../db/ids.js';
+import {
+  users,
+  decks,
+  sessions,
+  participants,
+  responses,
+  refreshTokens,
+  type SessionStateName,
+} from '../db/schema.js';
 import { runCleanup } from '../jobs/cleanup.js';
-import { Types } from 'mongoose';
 
 const G = '\x1b[32m';
 const R = '\x1b[31m';
@@ -38,199 +53,193 @@ function assert(condition: unknown, message: string): asserts condition {
 const DAY = 24 * 60 * 60 * 1000;
 const daysAgo = (days: number): Date => new Date(Date.now() - days * DAY);
 
+const random = (length: number) =>
+  Array.from({ length }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+
 async function main(): Promise<void> {
   await connectDb();
 
   const stamp = Date.now();
   process.stdout.write(`\n${D}Cleanup checks${X}\n\n`);
 
-  const owner = await User.create({
+  const ownerId = newId();
+  await db.insert(users).values({
+    id: ownerId,
     email: `cleanup-${String(stamp)}@example.test`,
     name: 'Cleanup Owner',
     passwordHash: 'x'.repeat(20),
   });
 
-  const created: { decks: Types.ObjectId[]; sessions: Types.ObjectId[] } = {
-    decks: [],
-    sessions: [],
-  };
+  const deckExists = async (id: string) =>
+    (await db.select({ id: decks.id }).from(decks).where(eq(decks.id, id))).length > 0;
+
+  const answersFor = async (sessionId: string) =>
+    (
+      await db.select({ value: count() }).from(responses).where(eq(responses.sessionId, sessionId))
+    )[0]?.value ?? 0;
 
   /* ---------------- decks ---------------- */
 
   await check('a deck deleted 40 days ago is purged', async () => {
-    const deck = await Deck.create({
-      ownerId: owner._id,
-      title: 'Old',
-      deletedAt: daysAgo(40),
-    });
+    const id = newId();
+    await db.insert(decks).values({ id, ownerId, title: 'Old', deletedAt: daysAgo(40) });
 
     await runCleanup();
 
-    const still = await Deck.findById(deck._id).lean();
-    assert(still === null, 'the deck survived its grace period');
+    assert(!(await deckExists(id)), 'the deck survived its grace period');
   });
 
   await check('a deck deleted yesterday survives', async () => {
-    const deck = await Deck.create({
-      ownerId: owner._id,
-      title: 'Recent',
-      deletedAt: daysAgo(1),
-    });
-    created.decks.push(deck._id);
+    const id = newId();
+    await db.insert(decks).values({ id, ownerId, title: 'Recent', deletedAt: daysAgo(1) });
 
     await runCleanup();
 
-    const still = await Deck.findById(deck._id).lean();
-    assert(still !== null, 'a recently deleted deck was purged too early');
+    assert(await deckExists(id), 'a recently deleted deck was purged too early');
   });
 
   await check('a deck that was never deleted is untouched', async () => {
-    const deck = await Deck.create({ ownerId: owner._id, title: 'Live deck' });
-    created.decks.push(deck._id);
+    const id = newId();
+    await db.insert(decks).values({ id, ownerId, title: 'Live deck' });
 
     await runCleanup();
 
-    const still = await Deck.findById(deck._id).lean();
-    assert(still !== null, 'an active deck was deleted');
+    assert(await deckExists(id), 'an active deck was deleted');
+  });
+
+  await check('purging a deck keeps the sessions that presented it', async () => {
+    const deckId = newId();
+    await db
+      .insert(decks)
+      .values({ id: deckId, ownerId, title: 'Presented', deletedAt: daysAgo(40) });
+    const session = await makeSession(ownerId, daysAgo(10), 'closed', deckId);
+
+    await runCleanup();
+
+    const [after] = await db.select().from(sessions).where(eq(sessions.id, session));
+    assert(after, 'the session was deleted along with its deck');
+    assert(after.deckId === null, 'the session still points at the purged deck');
+    assert((await answersFor(session)) === 1, 'the session lost its answers with the deck');
   });
 
   /* ---------------- responses ---------------- */
 
-  const makeSession = async (endedAt: Date | null, state = 'closed') => {
-    const session = await Session.create({
-      deckId: new Types.ObjectId(),
-      ownerId: owner._id,
-      title: 'Session',
-      joinCode: String(Math.floor(Math.random() * 1_000_000)).padStart(6, '0'),
-      joinSlug: `slug${String(Math.random()).slice(2, 10)}`,
-      state,
-      mode: 'presenter_paced',
-      deckSnapshot: { title: 'S', slides: [] },
-      startedAt: endedAt ?? new Date(),
-      endedAt,
-    });
-    created.sessions.push(session._id);
-
-    const participant = await Participant.create({
-      sessionId: session._id,
-      deviceToken: `d${String(Math.random()).slice(2, 20)}`,
-    });
-
-    await Response.create({
-      sessionId: session._id,
-      slideId: 'slide-1',
-      participantId: participant._id,
-      kind: 'word_cloud',
-      payload: { kind: 'word_cloud', words: ['hello'] },
-      clientMsgId: `m${String(Math.random()).slice(2, 20)}`,
-    });
-
-    return session;
-  };
-
   await check('answers from a session closed 400 days ago are purged', async () => {
-    const session = await makeSession(daysAgo(400));
+    const session = await makeSession(ownerId, daysAgo(400));
 
     await runCleanup();
 
-    const responses = await Response.countDocuments({ sessionId: session._id });
-    assert(responses === 0, 'old answers survived');
+    assert((await answersFor(session)) === 0, 'old answers survived');
+
+    const participantsLeft = await db
+      .select({ value: count() })
+      .from(participants)
+      .where(eq(participants.sessionId, session));
+    assert((participantsLeft[0]?.value ?? 0) === 0, 'old participants survived');
 
     // The session row itself stays, so the history page still shows it ran.
-    const still = await Session.findById(session._id).lean();
-    assert(still !== null, 'the session row was deleted along with its answers');
+    const still = await db
+      .select({ id: sessions.id })
+      .from(sessions)
+      .where(eq(sessions.id, session));
+    assert(still.length === 1, 'the session row was deleted along with its answers');
   });
 
   await check('answers from a session closed last month survive', async () => {
-    const session = await makeSession(daysAgo(30));
+    const session = await makeSession(ownerId, daysAgo(30));
 
     await runCleanup();
 
-    const responses = await Response.countDocuments({ sessionId: session._id });
-    assert(responses === 1, 'recent answers were purged');
+    assert((await answersFor(session)) === 1, 'recent answers were purged');
   });
 
   await check('answers from a session that never ended survive', async () => {
-    const session = await makeSession(null, 'live');
+    const session = await makeSession(ownerId, null, 'live');
 
     await runCleanup();
 
-    const responses = await Response.countDocuments({ sessionId: session._id });
-    assert(responses === 1, 'answers from an open session were purged');
+    assert((await answersFor(session)) === 1, 'answers from an open session were purged');
   });
 
   /* ---------------- stale sessions ---------------- */
 
   await check('a session left live for two days is closed', async () => {
-    const session = await Session.create({
-      deckId: new Types.ObjectId(),
-      ownerId: owner._id,
-      title: 'Abandoned',
-      joinCode: String(Math.floor(Math.random() * 1_000_000)).padStart(6, '0'),
-      joinSlug: `slug${String(Math.random()).slice(2, 10)}`,
-      state: 'live',
-      mode: 'presenter_paced',
-      deckSnapshot: { title: 'S', slides: [] },
-      startedAt: daysAgo(2),
-    });
-    created.sessions.push(session._id);
+    const id = await makeSession(ownerId, null, 'live', null, daysAgo(2));
 
     await runCleanup();
 
-    const after = await Session.findById(session._id).lean();
+    const [after] = await db.select().from(sessions).where(eq(sessions.id, id));
     assert(after?.state === 'closed', 'an abandoned session stayed live');
     assert(after.endedAt !== null, 'it was closed without an end time');
   });
 
   await check('a session started an hour ago is left alone', async () => {
-    const session = await Session.create({
-      deckId: new Types.ObjectId(),
-      ownerId: owner._id,
-      title: 'Running',
-      joinCode: String(Math.floor(Math.random() * 1_000_000)).padStart(6, '0'),
-      joinSlug: `slug${String(Math.random()).slice(2, 10)}`,
-      state: 'live',
-      mode: 'presenter_paced',
-      deckSnapshot: { title: 'S', slides: [] },
-      startedAt: new Date(Date.now() - 60 * 60 * 1000),
-    });
-    created.sessions.push(session._id);
+    const id = await makeSession(
+      ownerId,
+      null,
+      'live',
+      null,
+      new Date(Date.now() - 60 * 60 * 1000),
+    );
 
     await runCleanup();
 
-    const after = await Session.findById(session._id).lean();
+    const [after] = await db.select().from(sessions).where(eq(sessions.id, id));
     assert(after?.state === 'live', 'a live session was closed while it was still running');
   });
 
   /* ---------------- tokens ---------------- */
 
-  await check('a token revoked long ago is purged', async () => {
-    const token = await RefreshToken.create({
-      userId: owner._id,
-      tokenHash: `h${String(Math.random()).slice(2, 30)}`,
-      family: `f${String(Math.random()).slice(2, 20)}`,
-      expiresAt: new Date(Date.now() + DAY),
-      revokedAt: daysAgo(40),
+  const tokenExists = async (id: string) =>
+    (await db.select({ id: refreshTokens.id }).from(refreshTokens).where(eq(refreshTokens.id, id)))
+      .length > 0;
+
+  const makeToken = async (values: { expiresAt: Date; revokedAt?: Date }) => {
+    const id = newId();
+    await db.insert(refreshTokens).values({
+      id,
+      userId: ownerId,
+      tokenHash: `h${random(40)}`,
+      family: `f${random(20)}`,
+      ...values,
     });
+    return id;
+  };
+
+  await check('a token revoked long ago is purged', async () => {
+    const id = await makeToken({ expiresAt: new Date(Date.now() + DAY), revokedAt: daysAgo(40) });
 
     await runCleanup();
 
-    const still = await RefreshToken.findById(token._id).lean();
-    assert(still === null, 'an old revoked token survived');
+    assert(!(await tokenExists(id)), 'an old revoked token survived');
+  });
+
+  await check('an expired token is purged', async () => {
+    // MongoDB did this with a TTL index. Postgres has none, so without the
+    // job the table would grow by a row on every refresh, forever.
+    const id = await makeToken({ expiresAt: daysAgo(1) });
+
+    await runCleanup();
+
+    assert(!(await tokenExists(id)), 'an expired token survived');
+  });
+
+  await check('a recently revoked token is kept for reuse detection', async () => {
+    // A revoked token presented again is how theft is noticed; purging it
+    // immediately would blind that check.
+    const id = await makeToken({ expiresAt: new Date(Date.now() + DAY), revokedAt: daysAgo(2) });
+
+    await runCleanup();
+
+    assert(await tokenExists(id), 'a recently revoked token was purged too early');
   });
 
   await check('a valid token is untouched', async () => {
-    const token = await RefreshToken.create({
-      userId: owner._id,
-      tokenHash: `h${String(Math.random()).slice(2, 30)}`,
-      family: `f${String(Math.random()).slice(2, 20)}`,
-      expiresAt: new Date(Date.now() + DAY),
-    });
+    const id = await makeToken({ expiresAt: new Date(Date.now() + DAY) });
 
     await runCleanup();
 
-    const still = await RefreshToken.findById(token._id).lean();
-    assert(still !== null, 'a valid token was deleted');
+    assert(await tokenExists(id), 'a valid token was deleted');
   });
 
   /* ---------------- idempotence ---------------- */
@@ -253,12 +262,8 @@ async function main(): Promise<void> {
   /* ---------------- cleanup ---------------- */
 
   process.stdout.write(`\n${D}Cleaning up test data...${X}\n`);
-  await Response.deleteMany({ sessionId: { $in: created.sessions } });
-  await Participant.deleteMany({ sessionId: { $in: created.sessions } });
-  await Session.deleteMany({ _id: { $in: created.sessions } });
-  await Deck.deleteMany({ _id: { $in: created.decks } });
-  await RefreshToken.deleteMany({ userId: owner._id });
-  await User.deleteOne({ _id: owner._id });
+  // Decks, sessions, participants, answers and tokens all go with the owner.
+  await db.delete(users).where(inArray(users.id, [ownerId]));
 
   const summary =
     failed === 0
@@ -270,7 +275,52 @@ async function main(): Promise<void> {
   if (failed > 0) process.exitCode = 1;
 }
 
-void main().catch((err: unknown) => {
+/** A session with one participant who has answered once. Returns its id. */
+async function makeSession(
+  ownerId: string,
+  endedAt: Date | null,
+  state: SessionStateName = 'closed',
+  deckId: string | null = null,
+  startedAt: Date = endedAt ?? new Date(),
+): Promise<string> {
+  const id = newId();
+
+  await db.insert(sessions).values({
+    id,
+    deckId,
+    ownerId,
+    title: 'Session',
+    // Closed sessions may share codes; live ones may not, so live test
+    // sessions get a code nothing real is likely to hold.
+    joinCode: String(Math.floor(Math.random() * 1_000_000)).padStart(6, '0'),
+    joinSlug: `slug${random(10)}`,
+    state,
+    mode: 'presenter_paced',
+    deckSnapshot: { title: 'S', slides: [] },
+    startedAt,
+    endedAt,
+  });
+
+  const participantId = newId();
+  await db
+    .insert(participants)
+    .values({ id: participantId, sessionId: id, deviceToken: `d${random(20)}` });
+
+  await db.insert(responses).values({
+    id: newId(),
+    sessionId: id,
+    slideId: 'slide-1',
+    participantId,
+    kind: 'word_cloud',
+    payload: { kind: 'word_cloud', words: ['hello'] },
+    clientMsgId: `m${random(20)}`,
+  });
+
+  return id;
+}
+
+void main().catch(async (err: unknown) => {
   process.stdout.write(`${R}The run itself failed: ${String(err)}${X}\n`);
+  await disconnectDb().catch(() => undefined);
   process.exitCode = 1;
 });

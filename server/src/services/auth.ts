@@ -1,7 +1,15 @@
 import argon2 from 'argon2';
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { Types } from 'mongoose';
-import { User, RefreshToken, type UserDoc } from '../models/index.js';
+import { and, desc, eq, gt, isNull, sql } from 'drizzle-orm';
+import { db, isUniqueViolation, type Executor } from '../lib/db.js';
+import { newId, isId } from '../db/ids.js';
+import {
+  users,
+  userIdentities,
+  refreshTokens,
+  type User,
+  type RevokeReason,
+} from '../db/schema.js';
 import {
   signAccessToken,
   generateRefreshToken,
@@ -16,6 +24,77 @@ import { HttpError } from '../app.js';
  * Authentication logic, deliberately free of Express types so it can be
  * tested directly and reused from the socket layer.
  */
+
+/* ------------------------------------------------------------------ */
+/* Accounts                                                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * A user as the rest of the server sees one.
+ *
+ * The password hash is not on this type at all. MongoDB hid it with a
+ * select:false flag, which meant any query that forgot to ask for it read
+ * it as absent -- the root of an earlier bug where accounts with passwords
+ * were reported as having none. Here the hash is only ever loaded by the
+ * two functions that verify it, and cannot leave this file.
+ */
+export type Account = Omit<User, 'passwordHash'> & { providers: string[] };
+
+/** Every column except the hash, for queries that return an account. */
+const accountColumns = {
+  id: users.id,
+  email: users.email,
+  hasPassword: users.hasPassword,
+  name: users.name,
+  avatarUrl: users.avatarUrl,
+  locale: users.locale,
+  emailVerifiedAt: users.emailVerifiedAt,
+  tokenVersion: users.tokenVersion,
+  role: users.role,
+  suspendedAt: users.suspendedAt,
+  suspendedReason: users.suspendedReason,
+  aiRequestsToday: users.aiRequestsToday,
+  aiRequestsResetAt: users.aiRequestsResetAt,
+  lastSeenAt: users.lastSeenAt,
+  deletedAt: users.deletedAt,
+  createdAt: users.createdAt,
+  updatedAt: users.updatedAt,
+};
+
+async function providersOf(executor: Executor, userId: string): Promise<string[]> {
+  const rows = await executor
+    .select({ provider: userIdentities.provider })
+    .from(userIdentities)
+    .where(eq(userIdentities.userId, userId))
+    .orderBy(userIdentities.linkedAt);
+
+  return rows.map((row) => row.provider);
+}
+
+/** An account by id, or null if it does not exist or was deleted. */
+export async function getAccount(userId: string, executor: Executor = db): Promise<Account | null> {
+  if (!isId(userId)) return null;
+
+  const [row] = await executor
+    .select(accountColumns)
+    .from(users)
+    .where(and(eq(users.id, userId), isNull(users.deletedAt)));
+
+  if (!row) return null;
+  return { ...row, providers: await providersOf(executor, row.id) };
+}
+
+/** Records that the account was just used, and returns it as it now stands. */
+async function touch(executor: Executor, userId: string): Promise<Account> {
+  const [row] = await executor
+    .update(users)
+    .set({ lastSeenAt: new Date() })
+    .where(eq(users.id, userId))
+    .returning(accountColumns);
+
+  if (!row) throw new HttpError(401, 'Please sign in again.', 'user_not_found');
+  return { ...row, providers: await providersOf(executor, row.id) };
+}
 
 /* ------------------------------------------------------------------ */
 /* Password hashing                                                    */
@@ -78,9 +157,9 @@ function hashIp(ip: string): string {
   return createHash('sha256').update(`pulse:${ip}`).digest('hex').slice(0, 32);
 }
 
-function claimsFor(user: UserDoc) {
+function claimsFor(user: Account) {
   return {
-    sub: user._id.toString(),
+    sub: user.id,
     tv: user.tokenVersion,
     email: user.email,
     name: user.name,
@@ -88,15 +167,17 @@ function claimsFor(user: UserDoc) {
 }
 
 async function issueSession(
-  user: UserDoc,
+  executor: Executor,
+  user: Account,
   device: DeviceInfo,
   family = generateTokenFamily(),
 ): Promise<IssuedSession> {
   const refreshToken = generateRefreshToken();
   const expiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_MS);
 
-  await RefreshToken.create({
-    userId: user._id,
+  await executor.insert(refreshTokens).values({
+    id: newId(),
+    userId: user.id,
     tokenHash: hashRefreshToken(refreshToken),
     family,
     expiresAt,
@@ -105,6 +186,14 @@ async function issueSession(
   });
 
   return { accessToken: signAccessToken(claimsFor(user)), refreshToken, expiresAt };
+}
+
+/** Revokes every live token matching a condition, with a reason for the audit trail. */
+function revokeWhere(executor: Executor, condition: ReturnType<typeof and>, reason: RevokeReason) {
+  return executor
+    .update(refreshTokens)
+    .set({ revokedAt: new Date(), revokedReason: reason })
+    .where(and(condition, isNull(refreshTokens.revokedAt)));
 }
 
 /* ------------------------------------------------------------------ */
@@ -120,10 +209,13 @@ export interface RegisterInput {
 export async function register(
   input: RegisterInput,
   device: DeviceInfo,
-): Promise<{ user: UserDoc; session: IssuedSession }> {
+): Promise<{ user: Account; session: IssuedSession }> {
   const email = input.email.trim().toLowerCase();
 
-  const existing = await User.findOne({ email }).select('+passwordHash');
+  const [existing] = await db
+    .select({ passwordHash: users.passwordHash })
+    .from(users)
+    .where(eq(users.email, email));
 
   if (existing) {
     // The account exists but has only a social login. Setting a password
@@ -139,14 +231,31 @@ export async function register(
     throw new HttpError(409, 'An account with that email already exists.', 'email_taken');
   }
 
-  const user = await User.create({
-    email,
-    passwordHash: await hashPassword(input.password),
-    name: input.name.trim(),
-  });
+  const passwordHash = await hashPassword(input.password);
 
-  logger.info({ userId: user._id.toString() }, 'Account created');
-  return { user, session: await issueSession(user, device) };
+  try {
+    return await db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(users)
+        .values({ id: newId(), email, passwordHash, name: input.name.trim() })
+        .returning(accountColumns);
+
+      if (!created) throw new Error('Account insert returned no row');
+
+      const user: Account = { ...created, providers: [] };
+      logger.info({ userId: user.id }, 'Account created');
+
+      return { user, session: await issueSession(tx, user, device) };
+    });
+  } catch (err) {
+    // Two sign-ups for the same address racing past the check above: the
+    // unique index lets exactly one through, and the other gets the same
+    // answer it would have got a moment later.
+    if (isUniqueViolation(err, 'users_email_key')) {
+      throw new HttpError(409, 'An account with that email already exists.', 'email_taken');
+    }
+    throw err;
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -164,7 +273,7 @@ export async function register(
  * Called after credentials are verified, never before: refusing early
  * would tell anyone who asked which addresses have suspended accounts.
  */
-function assertNotSuspended(user: UserDoc): void {
+function assertNotSuspended(user: Pick<User, 'suspendedAt' | 'suspendedReason'>): void {
   if (!user.suspendedAt) return;
 
   throw new HttpError(
@@ -178,25 +287,34 @@ export async function login(
   email: string,
   password: string,
   device: DeviceInfo,
-): Promise<{ user: UserDoc; session: IssuedSession }> {
+): Promise<{ user: Account; session: IssuedSession }> {
   const normalised = email.trim().toLowerCase();
-  const user = await User.findOne({ email: normalised, deletedAt: null }).select('+passwordHash');
+
+  const [found] = await db
+    .select({
+      id: users.id,
+      passwordHash: users.passwordHash,
+      suspendedAt: users.suspendedAt,
+      suspendedReason: users.suspendedReason,
+    })
+    .from(users)
+    .where(and(eq(users.email, normalised), isNull(users.deletedAt)));
 
   // Always run a verification, even with no user, so the response time does
   // not reveal whether the account exists.
-  const hash = user?.passwordHash ?? (await getDecoyHash());
+  const hash = found?.passwordHash ?? (await getDecoyHash());
   const ok = await verifyPassword(hash, password);
 
-  if (!user || !ok || !user.passwordHash) {
+  if (!found || !ok || !found.passwordHash) {
     throw new HttpError(401, 'That email or password is not right.', 'invalid_credentials');
   }
 
-  assertNotSuspended(user);
+  assertNotSuspended(found);
 
-  user.lastSeenAt = new Date();
-  await user.save();
-
-  return { user, session: await issueSession(user, device) };
+  return db.transaction(async (tx) => {
+    const user = await touch(tx, found.id);
+    return { user, session: await issueSession(tx, user, device) };
+  });
 }
 
 /* ------------------------------------------------------------------ */
@@ -206,53 +324,83 @@ export async function login(
 export async function refresh(
   presentedToken: string,
   device: DeviceInfo,
-): Promise<{ user: UserDoc; session: IssuedSession }> {
+): Promise<{ user: Account; session: IssuedSession }> {
   const tokenHash = hashRefreshToken(presentedToken);
-  const record = await RefreshToken.findOne({ tokenHash });
 
-  if (!record) {
-    throw new HttpError(401, 'Please sign in again.', 'invalid_refresh_token');
-  }
+  return db
+    .transaction(async (tx) => {
+      /*
+       * Consume the token in one statement.
+       *
+       * Reading it, checking it was unused, then marking it used is a race:
+       * two requests presenting the same token at the same moment could both
+       * see it unused and both be issued a new one. The conditional update
+       * lets exactly one of them match; the other finds nothing to consume
+       * and falls through to the checks below.
+       */
+      const [consumed] = await tx
+        .update(refreshTokens)
+        .set({ usedAt: new Date(), revokedAt: new Date(), revokedReason: 'rotated' })
+        .where(
+          and(
+            eq(refreshTokens.tokenHash, tokenHash),
+            isNull(refreshTokens.usedAt),
+            isNull(refreshTokens.revokedAt),
+            gt(refreshTokens.expiresAt, new Date()),
+          ),
+        )
+        .returning({ userId: refreshTokens.userId, family: refreshTokens.family });
 
-  /*
-   * The token exists but has already been exchanged. Two parties therefore
-   * hold it, and we cannot tell which is legitimate. Revoke the whole family
-   * so both are forced to re-authenticate — the attacker loses access, and
-   * the real user is inconvenienced once rather than silently compromised.
-   */
-  if (record.usedAt || record.revokedAt) {
-    await RefreshToken.updateMany(
-      { family: record.family, revokedAt: null },
-      { $set: { revokedAt: new Date(), revokedReason: 'reuse_detected' } },
-    );
-    // Mongoose types this loosely; the runtime value is an ObjectId.
-    const ownerId = (record.userId as Types.ObjectId).toString();
-    logger.warn(
-      { userId: ownerId, family: record.family },
-      'Refresh token reuse detected; token family revoked',
-    );
-    throw new HttpError(401, 'Please sign in again.', 'token_reuse_detected');
-  }
+      if (!consumed) {
+        const [record] = await tx
+          .select({
+            userId: refreshTokens.userId,
+            family: refreshTokens.family,
+            usedAt: refreshTokens.usedAt,
+            revokedAt: refreshTokens.revokedAt,
+          })
+          .from(refreshTokens)
+          .where(eq(refreshTokens.tokenHash, tokenHash));
 
-  if (record.expiresAt.getTime() < Date.now()) {
-    throw new HttpError(401, 'Your session expired. Please sign in again.', 'refresh_expired');
-  }
+        if (!record) {
+          throw new HttpError(401, 'Please sign in again.', 'invalid_refresh_token');
+        }
 
-  const user = await User.findOne({ _id: record.userId, deletedAt: null });
-  if (!user) {
-    throw new HttpError(401, 'Please sign in again.', 'user_not_found');
-  }
+        /*
+         * The token exists but has already been exchanged. Two parties
+         * therefore hold it, and we cannot tell which is legitimate. Revoke
+         * the whole family so both are forced to re-authenticate -- the
+         * attacker loses access, and the real user is inconvenienced once
+         * rather than silently compromised.
+         *
+         * Committed by returning rather than throwing: an exception would roll
+         * the revocation back along with everything else in the transaction.
+         */
+        if (record.usedAt || record.revokedAt) {
+          await revokeWhere(tx, eq(refreshTokens.family, record.family), 'reuse_detected');
 
-  // Retire the presented token, then issue a replacement in the same family.
-  record.usedAt = new Date();
-  record.revokedAt = new Date();
-  record.revokedReason = 'rotated';
-  await record.save();
+          logger.warn(
+            { userId: record.userId, family: record.family },
+            'Refresh token reuse detected; token family revoked',
+          );
+          return null;
+        }
 
-  user.lastSeenAt = new Date();
-  await user.save();
+        throw new HttpError(401, 'Your session expired. Please sign in again.', 'refresh_expired');
+      }
 
-  return { user, session: await issueSession(user, device, record.family) };
+      const account = await getAccount(consumed.userId, tx);
+      if (!account) {
+        throw new HttpError(401, 'Please sign in again.', 'user_not_found');
+      }
+
+      const user = await touch(tx, account.id);
+      return { user, session: await issueSession(tx, user, device, consumed.family) };
+    })
+    .then((result) => {
+      if (!result) throw new HttpError(401, 'Please sign in again.', 'token_reuse_detected');
+      return result;
+    });
 }
 
 /* ------------------------------------------------------------------ */
@@ -260,27 +408,30 @@ export async function refresh(
 /* ------------------------------------------------------------------ */
 
 export async function logout(presentedToken: string): Promise<void> {
-  const record = await RefreshToken.findOne({ tokenHash: hashRefreshToken(presentedToken) });
+  const [record] = await db
+    .select({ family: refreshTokens.family })
+    .from(refreshTokens)
+    .where(eq(refreshTokens.tokenHash, hashRefreshToken(presentedToken)));
+
   if (!record) return; // Already gone. Nothing to do, and nothing to reveal.
 
-  await RefreshToken.updateMany(
-    { family: record.family, revokedAt: null },
-    { $set: { revokedAt: new Date(), revokedReason: 'logout' } },
-  );
+  await revokeWhere(db, eq(refreshTokens.family, record.family), 'logout');
 }
 
 /** Signs the user out of every device, everywhere. */
 export async function logoutEverywhere(userId: string): Promise<void> {
-  const id = new Types.ObjectId(userId);
+  if (!isId(userId)) return;
 
-  await RefreshToken.updateMany(
-    { userId: id, revokedAt: null },
-    { $set: { revokedAt: new Date(), revokedReason: 'logout_all' } },
-  );
+  await db.transaction(async (tx) => {
+    await revokeWhere(tx, eq(refreshTokens.userId, userId), 'logout_all');
 
-  // Bumping the version invalidates every outstanding access token too,
-  // without needing a blocklist.
-  await User.updateOne({ _id: id }, { $inc: { tokenVersion: 1 } });
+    // Bumping the version invalidates every outstanding access token too,
+    // without needing a blocklist.
+    await tx
+      .update(users)
+      .set({ tokenVersion: sql`${users.tokenVersion} + 1` })
+      .where(eq(users.id, userId));
+  });
 }
 
 /* ------------------------------------------------------------------ */
@@ -306,69 +457,101 @@ export interface SocialProfile {
 export async function socialLogin(
   profile: SocialProfile,
   device: DeviceInfo,
-): Promise<{ user: UserDoc; session: IssuedSession; created: boolean }> {
+): Promise<{ user: Account; session: IssuedSession; created: boolean }> {
   const email = profile.email.trim().toLowerCase();
 
-  // Already linked: the normal returning-user path.
-  const linked = await User.findOne({
-    'identities.provider': profile.provider,
-    'identities.subject': profile.subject,
-    deletedAt: null,
-  });
-
-  if (linked) {
-    assertNotSuspended(linked);
-    linked.lastSeenAt = new Date();
-    await linked.save();
-    return { user: linked, session: await issueSession(linked, device), created: false };
-  }
-
-  const byEmail = await User.findOne({ email, deletedAt: null });
-
-  if (byEmail) {
-    assertNotSuspended(byEmail);
-
-    if (!profile.emailVerified) {
-      throw new HttpError(
-        409,
-        'That email already has an account. Sign in with your password to link Google.',
-        'email_unverified_at_provider',
+  return db.transaction(async (tx) => {
+    // Already linked: the normal returning-user path.
+    const [linked] = await tx
+      .select({
+        id: users.id,
+        suspendedAt: users.suspendedAt,
+        suspendedReason: users.suspendedReason,
+      })
+      .from(userIdentities)
+      .innerJoin(users, eq(users.id, userIdentities.userId))
+      .where(
+        and(
+          eq(userIdentities.provider, profile.provider),
+          eq(userIdentities.subject, profile.subject),
+          isNull(users.deletedAt),
+        ),
       );
+
+    if (linked) {
+      assertNotSuspended(linked);
+      const user = await touch(tx, linked.id);
+      return { user, session: await issueSession(tx, user, device), created: false };
     }
 
-    byEmail.identities.push({
+    const [byEmail] = await tx
+      .select({
+        id: users.id,
+        avatarUrl: users.avatarUrl,
+        emailVerifiedAt: users.emailVerifiedAt,
+        suspendedAt: users.suspendedAt,
+        suspendedReason: users.suspendedReason,
+      })
+      .from(users)
+      .where(and(eq(users.email, email), isNull(users.deletedAt)));
+
+    if (byEmail) {
+      assertNotSuspended(byEmail);
+
+      if (!profile.emailVerified) {
+        throw new HttpError(
+          409,
+          'That email already has an account. Sign in with your password to link Google.',
+          'email_unverified_at_provider',
+        );
+      }
+
+      await tx.insert(userIdentities).values({
+        provider: profile.provider,
+        subject: profile.subject,
+        userId: byEmail.id,
+        email,
+      });
+
+      await tx
+        .update(users)
+        .set({
+          ...(!byEmail.avatarUrl && profile.avatarUrl ? { avatarUrl: profile.avatarUrl } : {}),
+          ...(byEmail.emailVerifiedAt ? {} : { emailVerifiedAt: new Date() }),
+        })
+        .where(eq(users.id, byEmail.id));
+
+      const user = await touch(tx, byEmail.id);
+
+      logger.info(
+        { userId: user.id, provider: profile.provider },
+        'Linked social identity to existing account',
+      );
+      return { user, session: await issueSession(tx, user, device), created: false };
+    }
+
+    const userId = newId();
+
+    await tx.insert(users).values({
+      id: userId,
+      email,
+      name: profile.name.trim() || (email.split('@')[0] ?? 'New user'),
+      avatarUrl: profile.avatarUrl,
+      emailVerifiedAt: profile.emailVerified ? new Date() : null,
+    });
+
+    await tx.insert(userIdentities).values({
       provider: profile.provider,
       subject: profile.subject,
+      userId,
       email,
-      linkedAt: new Date(),
     });
-    if (!byEmail.avatarUrl && profile.avatarUrl) byEmail.avatarUrl = profile.avatarUrl;
-    byEmail.emailVerifiedAt ??= new Date();
-    byEmail.lastSeenAt = new Date();
-    await byEmail.save();
 
-    logger.info(
-      { userId: byEmail._id.toString(), provider: profile.provider },
-      'Linked social identity to existing account',
-    );
-    return { user: byEmail, session: await issueSession(byEmail, device), created: false };
-  }
+    const user = await touch(tx, userId);
 
-  const user = await User.create({
-    email,
-    name: profile.name.trim() || email.split('@')[0],
-    avatarUrl: profile.avatarUrl,
-    emailVerifiedAt: profile.emailVerified ? new Date() : null,
-    identities: [
-      { provider: profile.provider, subject: profile.subject, email, linkedAt: new Date() },
-    ],
+    logger.info({ userId, provider: profile.provider }, 'Account created through social login');
+    return { user, session: await issueSession(tx, user, device), created: true };
   });
-
-  logger.info(
-    { userId: user._id.toString(), provider: profile.provider },
-    'Account created through social login',
-  );
-  return { user, session: await issueSession(user, device), created: true };
 }
 
 /* ------------------------------------------------------------------ */
@@ -380,23 +563,32 @@ export async function changePassword(
   currentPassword: string,
   newPassword: string,
 ): Promise<void> {
-  const user = await User.findById(userId).select('+passwordHash');
-  if (!user) throw new HttpError(404, 'Account not found.', 'user_not_found');
+  const [found] = isId(userId)
+    ? await db
+        .select({ passwordHash: users.passwordHash })
+        .from(users)
+        .where(and(eq(users.id, userId), isNull(users.deletedAt)))
+    : [];
 
-  if (user.passwordHash) {
-    if (!(await verifyPassword(user.passwordHash, currentPassword))) {
+  if (!found) throw new HttpError(404, 'Account not found.', 'user_not_found');
+
+  if (found.passwordHash) {
+    if (!(await verifyPassword(found.passwordHash, currentPassword))) {
       throw new HttpError(401, 'Your current password is not right.', 'invalid_credentials');
     }
   }
 
-  user.passwordHash = await hashPassword(newPassword);
-  user.tokenVersion += 1; // Kill every outstanding access token.
-  await user.save();
+  const passwordHash = await hashPassword(newPassword);
 
-  await RefreshToken.updateMany(
-    { userId: user._id, revokedAt: null },
-    { $set: { revokedAt: new Date(), revokedReason: 'password_changed' } },
-  );
+  await db.transaction(async (tx) => {
+    await tx
+      .update(users)
+      // Kill every outstanding access token along with the old password.
+      .set({ passwordHash, tokenVersion: sql`${users.tokenVersion} + 1` })
+      .where(eq(users.id, userId));
+
+    await revokeWhere(tx, eq(refreshTokens.userId, userId), 'password_changed');
+  });
 
   logger.info({ userId }, 'Password changed; all sessions revoked');
 }
@@ -417,18 +609,30 @@ export async function listSessions(
   userId: string,
   currentToken?: string,
 ): Promise<ActiveSession[]> {
+  if (!isId(userId)) return [];
+
   const currentHash = currentToken ? hashRefreshToken(currentToken) : null;
 
-  const rows = await RefreshToken.find({
-    userId: new Types.ObjectId(userId),
-    revokedAt: null,
-    expiresAt: { $gt: new Date() },
-  })
-    .sort({ createdAt: -1 })
-    .lean();
+  const rows = await db
+    .select({
+      id: refreshTokens.id,
+      userAgent: refreshTokens.userAgent,
+      tokenHash: refreshTokens.tokenHash,
+      createdAt: refreshTokens.createdAt,
+      expiresAt: refreshTokens.expiresAt,
+    })
+    .from(refreshTokens)
+    .where(
+      and(
+        eq(refreshTokens.userId, userId),
+        isNull(refreshTokens.revokedAt),
+        gt(refreshTokens.expiresAt, new Date()),
+      ),
+    )
+    .orderBy(desc(refreshTokens.createdAt));
 
   return rows.map((r) => ({
-    id: r._id.toString(),
+    id: r.id,
     userAgent: r.userAgent,
     createdAt: r.createdAt,
     expiresAt: r.expiresAt,
@@ -437,11 +641,16 @@ export async function listSessions(
 }
 
 export async function revokeSession(userId: string, sessionId: string): Promise<void> {
-  const result = await RefreshToken.updateOne(
-    { _id: new Types.ObjectId(sessionId), userId: new Types.ObjectId(userId), revokedAt: null },
-    { $set: { revokedAt: new Date(), revokedReason: 'logout' } },
-  );
-  if (result.matchedCount === 0) {
+  const revoked =
+    isId(userId) && isId(sessionId)
+      ? await revokeWhere(
+          db,
+          and(eq(refreshTokens.id, sessionId), eq(refreshTokens.userId, userId)),
+          'logout',
+        ).returning({ id: refreshTokens.id })
+      : [];
+
+  if (revoked.length === 0) {
     throw new HttpError(404, 'That session was not found.', 'session_not_found');
   }
 }
@@ -471,18 +680,17 @@ export interface PublicUser {
 }
 
 /** Everything the client is allowed to know about the signed-in user. */
-export function toPublicUser(user: UserDoc): PublicUser {
+export function toPublicUser(user: Account): PublicUser {
   return {
-    id: user._id.toString(),
+    id: user.id,
     email: user.email,
     name: user.name,
     avatarUrl: user.avatarUrl,
     locale: user.locale,
     emailVerified: user.emailVerifiedAt !== null,
-    // The stored flag, not the hash: passwordHash is select:false and is
-    // absent on most queries. See the note on the field in models/User.ts.
+    // Generated by Postgres from the hash, so it cannot disagree with it.
     hasPassword: user.hasPassword,
-    providers: user.identities.map((i) => i.provider),
+    providers: user.providers,
     role: user.role,
   };
 }

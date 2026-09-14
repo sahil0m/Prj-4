@@ -1,13 +1,19 @@
 import { randomInt, randomBytes } from 'node:crypto';
-import { Types } from 'mongoose';
+import { and, asc, count, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
+import { db, isUniqueViolation } from '../lib/db.js';
+import { newId, isId } from '../db/ids.js';
 import {
-  Session,
-  Participant,
-  Response,
-  Deck,
-  type SessionDoc,
-  type ParticipantDoc,
-} from '../models/index.js';
+  decks,
+  sessions,
+  participants,
+  responses,
+  audienceQuestions,
+  type Session,
+  type Participant,
+  type AudienceQuestion,
+  type DeckSnapshot,
+} from '../db/schema.js';
+import { orderedSlides, settingsOf, themeOf } from './decks.js';
 import { HttpError } from '../app.js';
 import { logger } from '../lib/logger.js';
 import { isProfane } from './profanity.js';
@@ -33,6 +39,9 @@ import {
  * whole reason the snapshot exists.
  */
 
+const sessionNotFound = () =>
+  new HttpError(404, 'That session was not found.', 'session_not_found');
+
 /* ------------------------------------------------------------------ */
 /* Join codes                                                          */
 /* ------------------------------------------------------------------ */
@@ -41,34 +50,11 @@ import {
  * Six digits, random rather than sequential.
  *
  * Sequential codes would let anyone who joined one session guess the next.
- * Uniqueness is only enforced among sessions that are currently joinable,
+ * Uniqueness among joinable sessions is enforced by a partial unique index,
  * so the space is never exhausted however many sessions have ever run.
  */
-async function allocateJoinCode(): Promise<string> {
-  for (let attempt = 0; attempt < 12; attempt += 1) {
-    const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
-
-    const taken = await Session.exists({
-      joinCode: code,
-      state: { $in: ['scheduled', 'live', 'paused'] },
-    });
-
-    if (!taken) return code;
-  }
-
-  // Twelve collisions in a row means a great many sessions are live at once.
-  throw new HttpError(503, 'Too many sessions are running. Try again shortly.', 'no_join_code');
-}
-
-/**
- * A subdocument as plain values.
- *
- * Mongoose types these paths as plain objects but returns subdocuments at
- * runtime, so a spread copies internal fields instead of the data.
- */
-function toPlain<T>(value: T): T {
-  const candidate = value as { toObject?: () => T };
-  return typeof candidate.toObject === 'function' ? candidate.toObject() : { ...value };
+function randomJoinCode(): string {
+  return String(randomInt(0, 1_000_000)).padStart(6, '0');
 }
 
 /** Permanent and never reissued, so it is safe on a printed handout. */
@@ -81,76 +67,158 @@ function newJoinSlug(): string {
 }
 
 /* ------------------------------------------------------------------ */
-/* Starting and ending                                                 */
+/* Loading                                                             */
 /* ------------------------------------------------------------------ */
 
-export async function startSession(deckId: string, ownerId: string): Promise<SessionDoc> {
-  if (!Types.ObjectId.isValid(deckId)) {
-    throw new HttpError(404, 'That deck was not found.', 'deck_not_found');
-  }
+/** A session by id, for a participant's socket. Null if it does not exist. */
+export async function getSession(sessionId: string): Promise<Session | null> {
+  if (!isId(sessionId)) return null;
+  const [session] = await db.select().from(sessions).where(eq(sessions.id, sessionId));
+  return session ?? null;
+}
 
-  const deck = await Deck.findOne({ _id: deckId, ownerId, deletedAt: null });
-  if (!deck) throw new HttpError(404, 'That deck was not found.', 'deck_not_found');
+/** A session its owner is asking for, or null. */
+export async function findOwnedSession(
+  sessionId: string,
+  ownerId: string,
+): Promise<Session | null> {
+  if (!isId(sessionId) || !isId(ownerId)) return null;
 
-  if (deck.slides.length === 0) {
-    throw new HttpError(422, 'Add a slide before presenting this deck.', 'deck_empty');
-  }
+  const [session] = await db
+    .select()
+    .from(sessions)
+    .where(and(eq(sessions.id, sessionId), eq(sessions.ownerId, ownerId)));
 
-  // Reuse a session that is already live for this deck rather than stranding
-  // participants who have already joined the previous one.
-  const existing = await Session.findOne({
-    deckId: deck._id,
-    ownerId,
-    state: { $in: ['live', 'paused'] },
-  });
-  if (existing) return existing;
+  return session ?? null;
+}
 
-  // config is Schema.Types.Mixed, which Mongoose types as `any`; it was
-  // validated by the kind's Zod schema on the way in, so the shape is known
-  // even though the type system cannot see it.
-  const ordered = (
-    deck.slides.slice() as { id: string; kind: SlideKind; position: number; config: unknown }[]
-  )
-    .sort((a, b) => a.position - b.position)
-    .map((s) => ({ id: s.id, kind: s.kind, position: s.position, config: s.config }));
-
-  const session = await Session.create({
-    deckId: deck._id,
-    ownerId,
-    title: deck.title,
-    joinCode: await allocateJoinCode(),
-    joinSlug: newJoinSlug(),
-    state: 'live',
-    mode: deck.settings?.mode ?? 'presenter_paced',
-    deckSnapshot: {
-      title: deck.title,
-      slides: ordered,
-      // toObject, not a spread: spreading a Mongoose subdocument stores its
-      // internals rather than its values, which froze a useless theme into
-      // every snapshot.
-      theme: toPlain(deck.theme),
-      settings: deck.settings,
-    },
-    currentSlideId: ordered[0]?.id ?? null,
-    participationOpen: true,
-    resultsVisible: true,
-  });
-
-  logger.info(
-    { sessionId: session._id.toString(), deckId, joinCode: session.joinCode },
-    'Session started',
-  );
+async function ownedSession(sessionId: string, ownerId: string): Promise<Session> {
+  const session = await findOwnedSession(sessionId, ownerId);
+  if (!session) throw sessionNotFound();
   return session;
 }
 
-export async function endSession(sessionId: string, ownerId: string): Promise<SessionDoc> {
+export async function getParticipant(participantId: string): Promise<Participant | null> {
+  if (!isId(participantId)) return null;
+  const [participant] = await db
+    .select()
+    .from(participants)
+    .where(eq(participants.id, participantId));
+  return participant ?? null;
+}
+
+/* ------------------------------------------------------------------ */
+/* Starting and ending                                                 */
+/* ------------------------------------------------------------------ */
+
+export async function startSession(deckId: string, ownerId: string): Promise<Session> {
+  if (!isId(deckId) || !isId(ownerId)) {
+    throw new HttpError(404, 'That deck was not found.', 'deck_not_found');
+  }
+
+  return db.transaction(async (tx) => {
+    /*
+     * Locked, so a double-click on Present cannot start two sessions for
+     * one deck. The second request waits here, then finds the first one's
+     * session below and reuses it.
+     */
+    const [deck] = await tx
+      .select()
+      .from(decks)
+      .where(and(eq(decks.id, deckId), eq(decks.ownerId, ownerId), isNull(decks.deletedAt)))
+      .for('update');
+
+    if (!deck) throw new HttpError(404, 'That deck was not found.', 'deck_not_found');
+
+    const ordered = orderedSlides(deck.slides);
+
+    if (ordered.length === 0) {
+      throw new HttpError(422, 'Add a slide before presenting this deck.', 'deck_empty');
+    }
+
+    // Reuse a session that is already live for this deck rather than
+    // stranding participants who have already joined the previous one.
+    const [existing] = await tx
+      .select()
+      .from(sessions)
+      .where(
+        and(
+          eq(sessions.deckId, deck.id),
+          eq(sessions.ownerId, ownerId),
+          inArray(sessions.state, ['live', 'paused']),
+        ),
+      )
+      .limit(1);
+
+    if (existing) return existing;
+
+    const settings = settingsOf(deck.settings);
+
+    const snapshot: DeckSnapshot = {
+      title: deck.title,
+      slides: ordered.map((s) => ({
+        id: s.id,
+        kind: s.kind,
+        position: s.position,
+        config: s.config,
+      })),
+      theme: { ...themeOf(deck.theme) },
+      settings: { ...settings },
+    };
+
+    /*
+     * The database decides whether a code is free, not a check before the
+     * insert: two sessions starting at the same instant could otherwise both
+     * see a code as unused. A collision rolls back to a savepoint and tries
+     * another code; twelve in a row means a great many sessions are live.
+     */
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      try {
+        const session = await tx.transaction(async (savepoint) => {
+          const [created] = await savepoint
+            .insert(sessions)
+            .values({
+              id: newId(),
+              deckId: deck.id,
+              ownerId,
+              title: deck.title,
+              joinCode: randomJoinCode(),
+              joinSlug: newJoinSlug(),
+              state: 'live',
+              mode: settings.mode,
+              deckSnapshot: snapshot,
+              currentSlideId: ordered[0]?.id ?? null,
+              participationOpen: true,
+              resultsVisible: true,
+            })
+            .returning();
+
+          if (!created) throw new Error('Session insert returned no row');
+          return created;
+        });
+
+        logger.info(
+          { sessionId: session.id, deckId, joinCode: session.joinCode },
+          'Session started',
+        );
+        return session;
+      } catch (err) {
+        if (isUniqueViolation(err)) continue;
+        throw err;
+      }
+    }
+
+    throw new HttpError(503, 'Too many sessions are running. Try again shortly.', 'no_join_code');
+  });
+}
+
+export async function endSession(sessionId: string, ownerId: string): Promise<Session> {
   const session = await ownedSession(sessionId, ownerId);
 
   // Ending twice is normal: the presenter's socket and its REST fallback
   // both run, so the second arrives moments after the first.
   if (session.state === 'closed' && session.endedAt) return session;
 
-  session.state = 'closed';
   /*
    * The first ending is the real one.
    *
@@ -158,29 +226,27 @@ export async function endSession(sessionId: string, ownerId: string): Promise<Se
    * after a session closed -- so overwriting it on a second call would
    * quietly restart the clock on data that was due to be removed.
    */
-  session.endedAt ??= new Date();
-  session.participationOpen = false;
-  await session.save();
+  const [ended] = await db
+    .update(sessions)
+    .set({
+      state: 'closed',
+      endedAt: sql`COALESCE(${sessions.endedAt}, now())`,
+      participationOpen: false,
+    })
+    .where(eq(sessions.id, session.id))
+    .returning();
 
   logger.info({ sessionId }, 'Session ended');
-  return session;
-}
-
-async function ownedSession(sessionId: string, ownerId: string): Promise<SessionDoc> {
-  if (!Types.ObjectId.isValid(sessionId)) {
-    throw new HttpError(404, 'That session was not found.', 'session_not_found');
-  }
-  const session = await Session.findOne({ _id: sessionId, ownerId });
-  if (!session) throw new HttpError(404, 'That session was not found.', 'session_not_found');
-  return session;
+  return ended ?? session;
 }
 
 /** Looks a session up the way a phone does: by the code on screen. */
-export async function findByJoinCode(joinCode: string): Promise<SessionDoc> {
-  const session = await Session.findOne({
-    joinCode,
-    state: { $in: ['live', 'paused'] },
-  });
+export async function findByJoinCode(joinCode: string): Promise<Session> {
+  const [session] = await db
+    .select()
+    .from(sessions)
+    .where(and(eq(sessions.joinCode, joinCode), inArray(sessions.state, ['live', 'paused'])))
+    .limit(1);
 
   if (!session) {
     throw new HttpError(
@@ -190,6 +256,53 @@ export async function findByJoinCode(joinCode: string): Promise<SessionDoc> {
     );
   }
   return session;
+}
+
+/* ------------------------------------------------------------------ */
+/* Presenter controls                                                  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Shows a slide to the room.
+ *
+ * A quiz slide's clock starts when the room first sees it, so everyone is
+ * scored against the same moment.
+ */
+export async function goToSlide(session: Session, slideId: string): Promise<Session> {
+  const slide = slideOf(session, slideId);
+  if (!slide) throw new HttpError(404, 'That slide is not in this deck.', 'slide_not_found');
+
+  const timed = Number(slide.config.countdownSeconds ?? 0) > 0;
+
+  const [updated] = await db
+    .update(sessions)
+    .set({
+      currentSlideId: slideId,
+      countdownStartedAt: timed ? new Date() : null,
+      countdownSlideId: timed ? slideId : null,
+    })
+    .where(eq(sessions.id, session.id))
+    .returning();
+
+  return updated ?? session;
+}
+
+export async function setParticipation(session: Session, open: boolean): Promise<Session> {
+  const [updated] = await db
+    .update(sessions)
+    .set({ participationOpen: open })
+    .where(eq(sessions.id, session.id))
+    .returning();
+  return updated ?? session;
+}
+
+export async function setResultsVisible(session: Session, visible: boolean): Promise<Session> {
+  const [updated] = await db
+    .update(sessions)
+    .set({ resultsVisible: visible })
+    .where(eq(sessions.id, session.id))
+    .returning();
+  return updated ?? session;
 }
 
 /* ------------------------------------------------------------------ */
@@ -211,8 +324,15 @@ interface Snapshot {
   theme?: Record<string, unknown>;
 }
 
-export function snapshotOf(session: SessionDoc): Snapshot {
-  return session.deckSnapshot as Snapshot;
+export function snapshotOf(session: Pick<Session, 'deckSnapshot'>): Snapshot {
+  const snapshot = session.deckSnapshot as Partial<DeckSnapshot> | null;
+
+  return {
+    title: snapshot?.title ?? '',
+    slides: (Array.isArray(snapshot?.slides) ? snapshot.slides : []) as SnapshotSlide[],
+    ...(snapshot?.settings ? { settings: snapshot.settings } : {}),
+    ...(snapshot?.theme ? { theme: snapshot.theme } : {}),
+  };
 }
 
 /**
@@ -246,17 +366,17 @@ function textOf(payload: unknown): string {
  * everyone advances at their own speed, which suits a survey left open for
  * a week as much as a workshop where groups work at different rates.
  */
-export function isSelfPaced(session: SessionDoc): boolean {
+export function isSelfPaced(session: Session): boolean {
   return snapshotOf(session).settings?.mode === 'audience_paced';
 }
 
 /** Whether reactions are allowed. On unless the author turned them off. */
-export function allowsReactions(session: SessionDoc): boolean {
+export function allowsReactions(session: Session): boolean {
   return snapshotOf(session).settings?.reactions !== false;
 }
 
 /** Whether the audience may send questions. Off unless the author asked. */
-export function allowsQuestions(session: SessionDoc): boolean {
+export function allowsQuestions(session: Session): boolean {
   return snapshotOf(session).settings?.chat === true;
 }
 
@@ -265,12 +385,12 @@ export function allowsQuestions(session: SessionDoc): boolean {
  *
  * Derived from the deck rather than read from a setting alone. A quiz
  * produces a leaderboard, and a leaderboard of "Anonymous, Anonymous,
- * Anonymous" is worthless — so any deck containing a quiz or a leaderboard
+ * Anonymous" is worthless -- so any deck containing a quiz or a leaderboard
  * slide asks, whatever the setting says. A presenter can still turn names
  * on for a non-quiz deck; they cannot accidentally turn them off for one
  * that needs them.
  */
-export function collectsNames(session: SessionDoc): boolean {
+export function collectsNames(session: Session): boolean {
   const snapshot = snapshotOf(session);
 
   if (snapshot.settings?.collectNames === true) return true;
@@ -280,7 +400,10 @@ export function collectsNames(session: SessionDoc): boolean {
   );
 }
 
-export function slideOf(session: SessionDoc, slideId: string | null): SnapshotSlide | null {
+export function slideOf(
+  session: Pick<Session, 'deckSnapshot'>,
+  slideId: string | null,
+): SnapshotSlide | null {
   if (!slideId) return null;
   return snapshotOf(session).slides.find((s) => s.id === slideId) ?? null;
 }
@@ -290,25 +413,37 @@ export function slideOf(session: SessionDoc, slideId: string | null): SnapshotSl
 /* ------------------------------------------------------------------ */
 
 export async function joinSession(
-  session: SessionDoc,
+  session: Session,
   deviceToken: string,
   displayName: string | undefined,
   locale: string | undefined,
-): Promise<ParticipantDoc> {
+): Promise<Participant> {
+  const now = new Date();
+
+  const changes = {
+    lastSeenAt: now,
+    ...(displayName === undefined ? {} : { displayName: displayName.slice(0, 60) }),
+    ...(locale === undefined ? {} : { locale: locale.slice(0, 16) }),
+  };
+
   // Upsert on (session, device) so a refresh rejoins rather than creating a
   // second person, which would inflate the count and the one-answer rule.
-  const participant = await Participant.findOneAndUpdate(
-    { sessionId: session._id, deviceToken },
-    {
-      $setOnInsert: { sessionId: session._id, deviceToken, firstSeenAt: new Date() },
-      $set: {
-        lastSeenAt: new Date(),
-        ...(displayName === undefined ? {} : { displayName: displayName.slice(0, 60) }),
-        ...(locale === undefined ? {} : { locale: locale.slice(0, 16) }),
-      },
-    },
-    { upsert: true, new: true, setDefaultsOnInsert: true },
-  );
+  const [participant] = await db
+    .insert(participants)
+    .values({
+      id: newId(),
+      sessionId: session.id,
+      deviceToken,
+      firstSeenAt: now,
+      ...changes,
+    })
+    .onConflictDoUpdate({
+      target: [participants.sessionId, participants.deviceToken],
+      set: changes,
+    })
+    .returning();
+
+  if (!participant) throw new Error('Participant upsert returned no row');
 
   if (participant.blockedAt) {
     throw new HttpError(403, 'You have been removed from this session.', 'blocked');
@@ -317,8 +452,13 @@ export async function joinSession(
   return participant;
 }
 
-export async function countParticipants(sessionId: Types.ObjectId): Promise<number> {
-  return Participant.countDocuments({ sessionId, blockedAt: null });
+export async function countParticipants(sessionId: string): Promise<number> {
+  const [row] = await db
+    .select({ value: count() })
+    .from(participants)
+    .where(and(eq(participants.sessionId, sessionId), isNull(participants.blockedAt)));
+
+  return row?.value ?? 0;
 }
 
 /* ------------------------------------------------------------------ */
@@ -326,8 +466,8 @@ export async function countParticipants(sessionId: Types.ObjectId): Promise<numb
 /* ------------------------------------------------------------------ */
 
 export interface RecordAnswerInput {
-  session: SessionDoc;
-  participant: ParticipantDoc;
+  session: Session;
+  participant: Participant;
   slideId: string;
   payload: unknown;
   clientMsgId: string;
@@ -398,69 +538,106 @@ export async function recordAnswer(
 
   const oneAnswerOnly = snapshotOf(session).settings?.oneAnswerPerDevice !== false;
 
-  if (oneAnswerOnly) {
-    const already = await Response.findOne({
-      sessionId: session._id,
-      slideId,
-      participantId: participant._id,
-      deletedAt: null,
-    });
-
-    // A resend of the same message is fine; a genuinely new answer is not.
-    if (already && already.clientMsgId !== clientMsgId) {
-      throw new HttpError(409, 'You have already answered this one.', 'already_answered');
-    }
-  }
-
   // Quiz answers are scored as they arrive, against the countdown that was
   // running at that moment. Scoring later, against a clock that has since
   // moved on, would silently change results the room has already seen.
+  const elapsedMs = elapsedFor(session, slideId, parsed.data);
   const scored = definitionFor(slide.kind).isQuiz
-    ? scoreAnswer(
-        {
-          kind: slide.kind,
-          payload: parsed.data,
-          elapsedMs: elapsedFor(session, slideId, parsed.data),
-        },
-        slide.config,
-      )
+    ? scoreAnswer({ kind: slide.kind, payload: parsed.data, elapsedMs }, slide.config)
     : null;
 
-  try {
-    const response = await Response.create({
-      sessionId: session._id,
-      slideId,
-      participantId: participant._id,
-      kind: slide.kind,
-      payload: parsed.data,
-      clientMsgId,
-      ...(scored
-        ? {
-            isCorrect: scored.correct,
-            points: scored.points,
-            elapsedMs: elapsedFor(session, slideId, parsed.data),
-          }
-        : {}),
-    });
+  return db.transaction(async (tx) => {
+    if (oneAnswerOnly) {
+      /*
+       * One person, one slide, one answer at a time.
+       *
+       * Checking for an earlier answer and then inserting is a race: a
+       * phone that fires two different answers together would have both
+       * pass the check. This lock, held until the transaction ends, makes
+       * the second wait for the first and then see it.
+       */
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtextextended(${`answer:${participant.id}:${slideId}`}, 0))`,
+      );
 
-    await Session.updateOne({ _id: session._id }, { $inc: { 'stats.responseCount': 1 } });
+      const [already] = await tx
+        .select({ clientMsgId: responses.clientMsgId })
+        .from(responses)
+        .where(
+          and(
+            eq(responses.sessionId, session.id),
+            eq(responses.slideId, slideId),
+            eq(responses.participantId, participant.id),
+            isNull(responses.deletedAt),
+          ),
+        )
+        .limit(1);
+
+      // A resend of the same message is fine; a genuinely new answer is not.
+      if (already && already.clientMsgId !== clientMsgId) {
+        throw new HttpError(409, 'You have already answered this one.', 'already_answered');
+      }
+    }
+
+    // The unique index on (session, clientMsgId) is the real guard against a
+    // double submit. A retry matches nothing to insert and is reported as the
+    // duplicate it is, rather than raised as an error.
+    const [inserted] = await tx
+      .insert(responses)
+      .values({
+        id: newId(),
+        sessionId: session.id,
+        slideId,
+        participantId: participant.id,
+        kind: slide.kind,
+        payload: parsed.data as Record<string, unknown>,
+        clientMsgId,
+        ...(scored ? { isCorrect: scored.correct, points: scored.points, elapsedMs } : {}),
+      })
+      .onConflictDoNothing({ target: [responses.sessionId, responses.clientMsgId] })
+      .returning({ id: responses.id });
+
+    if (!inserted) {
+      const [existing] = await tx
+        .select({ id: responses.id })
+        .from(responses)
+        .where(and(eq(responses.sessionId, session.id), eq(responses.clientMsgId, clientMsgId)));
+
+      return { responseId: existing?.id ?? '', duplicate: true };
+    }
+
+    // In the same transaction as the answer, so the counter and the score
+    // can never disagree with the rows they summarise.
+    await tx
+      .update(sessions)
+      .set({ responseCount: sql`${sessions.responseCount} + 1` })
+      .where(eq(sessions.id, session.id));
 
     // The running total is kept on the participant so the leaderboard does
     // not have to re-add every answer on every render.
     if (scored && scored.points > 0) {
-      await Participant.updateOne({ _id: participant._id }, { $inc: { score: scored.points } });
+      await tx
+        .update(participants)
+        .set({ score: sql`${participants.score} + ${scored.points}` })
+        .where(eq(participants.id, participant.id));
     }
 
-    return { responseId: response._id.toString(), duplicate: false };
-  } catch (err) {
-    // The unique index on (sessionId, clientMsgId) is the real guard against
-    // a double submit; two retries racing both reach here.
-    if (isDuplicateKey(err)) {
-      const existing = await Response.findOne({ sessionId: session._id, clientMsgId });
-      return { responseId: existing?._id.toString() ?? '', duplicate: true };
-    }
-    throw err;
-  }
+    return { responseId: inserted.id, duplicate: false };
+  });
+}
+
+/** How one stored answer was scored, for the phone that sent it. */
+export async function scoreOf(
+  responseId: string,
+): Promise<{ isCorrect: boolean | null; points: number | null } | null> {
+  if (!isId(responseId)) return null;
+
+  const [row] = await db
+    .select({ isCorrect: responses.isCorrect, points: responses.points })
+    .from(responses)
+    .where(eq(responses.id, responseId));
+
+  return row ?? null;
 }
 
 /**
@@ -471,7 +648,7 @@ export async function recordAnswer(
  * whenever a countdown is running, because a device clock is something a
  * participant can change.
  */
-function elapsedFor(session: SessionDoc, slideId: string, payload: unknown): number {
+function elapsedFor(session: Session, slideId: string, payload: unknown): number {
   if (session.countdownSlideId === slideId && session.countdownStartedAt) {
     return Math.max(0, Date.now() - session.countdownStartedAt.getTime());
   }
@@ -483,53 +660,105 @@ function elapsedFor(session: SessionDoc, slideId: string, payload: unknown): num
 }
 
 /* ------------------------------------------------------------------ */
+/* Audience questions                                                  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Stores a question from the audience.
+ *
+ * Idempotent on clientMsgId like an answer: a phone that retried gets back
+ * the question it already sent, and `duplicate` tells the caller not to
+ * announce it to the presenter a second time.
+ */
+export async function askQuestion(input: {
+  session: Session;
+  participant: Participant | null;
+  participantId: string;
+  text: string;
+  clientMsgId: string;
+}): Promise<{ question: AudienceQuestion; duplicate: boolean }> {
+  const [inserted] = await db
+    .insert(audienceQuestions)
+    .values({
+      id: newId(),
+      sessionId: input.session.id,
+      participantId: input.participantId,
+      body: input.text,
+      // Copied now so the presenter's queue needs no second lookup, and so it
+      // still reads correctly if the participant is removed.
+      authorName: input.participant?.displayName ?? '',
+      clientMsgId: input.clientMsgId,
+    })
+    .onConflictDoNothing({ target: [audienceQuestions.sessionId, audienceQuestions.clientMsgId] })
+    .returning();
+
+  if (inserted) return { question: inserted, duplicate: false };
+
+  const [existing] = await db
+    .select()
+    .from(audienceQuestions)
+    .where(
+      and(
+        eq(audienceQuestions.sessionId, input.session.id),
+        eq(audienceQuestions.clientMsgId, input.clientMsgId),
+      ),
+    );
+
+  if (!existing) throw new Error('Question conflict without an existing row');
+  return { question: existing, duplicate: true };
+}
+
+/* ------------------------------------------------------------------ */
 /* Leaderboard                                                         */
 /* ------------------------------------------------------------------ */
 
 /** Standings for a session, newest scores first. */
 export async function leaderboardFor(
-  session: SessionDoc,
+  session: Session,
   previous?: Map<string, number>,
 ): Promise<LeaderboardEntry[]> {
-  const rows = await Response.find({
-    sessionId: session._id,
-    deletedAt: null,
-    points: { $ne: null },
-  })
-    .select('participantId points isCorrect elapsedMs slideId')
-    .lean();
+  const rows = await db
+    .select({
+      participantId: responses.participantId,
+      points: responses.points,
+      isCorrect: responses.isCorrect,
+      elapsedMs: responses.elapsedMs,
+      slideId: responses.slideId,
+    })
+    .from(responses)
+    .where(
+      and(
+        eq(responses.sessionId, session.id),
+        isNull(responses.deletedAt),
+        isNotNull(responses.points),
+      ),
+    );
 
   if (rows.length === 0) return [];
 
-  // One lookup for every name, rather than a populate per row.
-  const participants = await Participant.find({ sessionId: session._id })
-    .select('displayName')
-    .lean();
+  // One lookup for every name, rather than one per row.
+  const people = await db
+    .select({ id: participants.id, displayName: participants.displayName })
+    .from(participants)
+    .where(eq(participants.sessionId, session.id));
 
-  const names = new Map(participants.map((p) => [p._id.toString(), p.displayName]));
+  const names = new Map(people.map((p) => [p.id, p.displayName]));
 
   // Slide order, so a streak means consecutive questions rather than
   // whichever answers happened to arrive together.
   const order = new Map(snapshotOf(session).slides.map((slide, index) => [slide.id, index]));
 
   return buildLeaderboard(
-    rows.map((row) => {
-      const id = (row.participantId as Types.ObjectId).toString();
-      return {
-        participantId: id,
-        displayName: names.get(id) ?? '',
-        points: row.points ?? 0,
-        correct: row.isCorrect === true,
-        elapsedMs: row.elapsedMs ?? undefined,
-        slideIndex: order.get(row.slideId),
-      };
-    }),
+    rows.map((row) => ({
+      participantId: row.participantId,
+      displayName: names.get(row.participantId) ?? '',
+      points: row.points ?? 0,
+      correct: row.isCorrect === true,
+      elapsedMs: row.elapsedMs ?? undefined,
+      slideIndex: order.get(row.slideId),
+    })),
     previous,
   );
-}
-
-function isDuplicateKey(err: unknown): boolean {
-  return typeof err === 'object' && err !== null && (err as { code?: number }).code === 11000;
 }
 
 export async function removeResponse(
@@ -539,44 +768,54 @@ export async function removeResponse(
 ): Promise<{ slideId: string }> {
   const session = await ownedSession(sessionId, ownerId);
 
-  if (!Types.ObjectId.isValid(responseId)) {
-    throw new HttpError(404, 'That answer was not found.', 'response_not_found');
-  }
+  const notFound = () => new HttpError(404, 'That answer was not found.', 'response_not_found');
+  if (!isId(responseId)) throw notFound();
 
   // Soft delete: aggregates skip it, but the record of what was said stays.
-  const response = await Response.findOneAndUpdate(
-    { _id: responseId, sessionId: session._id, deletedAt: null },
-    { $set: { deletedAt: new Date(), deletedReason: 'presenter' } },
-    { new: true },
-  );
+  const [removed] = await db
+    .update(responses)
+    .set({ deletedAt: new Date(), deletedReason: 'presenter' })
+    .where(
+      and(
+        eq(responses.id, responseId),
+        eq(responses.sessionId, session.id),
+        isNull(responses.deletedAt),
+      ),
+    )
+    .returning({ slideId: responses.slideId });
 
-  if (!response) throw new HttpError(404, 'That answer was not found.', 'response_not_found');
-  return { slideId: response.slideId };
+  if (!removed) throw notFound();
+  return { slideId: removed.slideId };
 }
 
 /* ------------------------------------------------------------------ */
 /* Results                                                             */
 /* ------------------------------------------------------------------ */
 
-export async function resultsFor(
-  session: SessionDoc,
-  slideId: string,
-): Promise<SlideResults | null> {
+/** Live answers to one slide, oldest first. */
+export function liveAnswers(sessionId: string, slideId: string) {
+  return db
+    .select({ id: responses.id, payload: responses.payload, upvotes: responses.upvotes })
+    .from(responses)
+    .where(
+      and(
+        eq(responses.sessionId, sessionId),
+        eq(responses.slideId, slideId),
+        isNull(responses.deletedAt),
+      ),
+    )
+    .orderBy(asc(responses.submittedAt));
+}
+
+export async function resultsFor(session: Session, slideId: string): Promise<SlideResults | null> {
   const slide = slideOf(session, slideId);
   if (!slide) return null;
 
-  const rows = await Response.find({ sessionId: session._id, slideId, deletedAt: null })
-    .select('payload upvotes')
-    .lean();
+  const rows = await liveAnswers(session.id, slideId);
 
   const data = aggregate(
     slide.kind,
-    rows.map((r) => ({
-      id: r._id.toString(),
-      // Mixed again: validated on write, opaque to the type system on read.
-      payload: r.payload as unknown,
-      upvotes: r.upvotes,
-    })),
+    rows.map((r) => ({ id: r.id, payload: r.payload, upvotes: r.upvotes })),
     slide.config,
   );
 
@@ -587,7 +826,7 @@ export async function resultsFor(
 /* Wire shapes                                                         */
 /* ------------------------------------------------------------------ */
 
-export function toSessionState(session: SessionDoc, participantCount: number): SessionState {
+export function toSessionState(session: Session, participantCount: number): SessionState {
   const countdownEndsAt = (() => {
     if (!session.countdownStartedAt || !session.countdownSlideId) return null;
     const slide = slideOf(session, session.countdownSlideId);
@@ -597,11 +836,9 @@ export function toSessionState(session: SessionDoc, participantCount: number): S
   })();
 
   return {
-    sessionId: session._id.toString(),
+    sessionId: session.id,
     state: session.state,
-    // The schema defaults this to null, but Mongoose types an optional
-    // path as possibly undefined; the wire format has only null.
-    currentSlideId: session.currentSlideId ?? null,
+    currentSlideId: session.currentSlideId,
     participationOpen: session.participationOpen,
     resultsVisible: session.resultsVisible,
     participantCount,
@@ -616,18 +853,18 @@ export function toSessionState(session: SessionDoc, participantCount: number): S
  * would let anyone with developer tools read the answer off the wire.
  */
 export async function participantSlideOf(
-  session: SessionDoc,
-  participantId: Types.ObjectId,
+  session: Session,
+  participantId: string,
 ): Promise<ParticipantSlide | null> {
   const selfPaced = isSelfPaced(session);
 
   // In a self-paced session each person has their own position; otherwise
   // everyone is wherever the presenter is.
-  let slideId = session.currentSlideId ?? null;
+  let slideId = session.currentSlideId;
 
   if (selfPaced) {
-    const participant = await Participant.findById(participantId).select('currentSlideId').lean();
-    slideId = participant?.currentSlideId ?? session.currentSlideId ?? null;
+    const participant = await getParticipant(participantId);
+    slideId = participant?.currentSlideId ?? session.currentSlideId;
   }
 
   const slide = slideOf(session, slideId);
@@ -636,18 +873,26 @@ export async function participantSlideOf(
   const slides = snapshotOf(session).slides;
   const index = slides.findIndex((s) => s.id === slide.id);
 
-  const answered = await Response.exists({
-    sessionId: session._id,
-    slideId: slide.id,
-    participantId,
-    deletedAt: null,
-  });
+  const [answered] = isId(participantId)
+    ? await db
+        .select({ id: responses.id })
+        .from(responses)
+        .where(
+          and(
+            eq(responses.sessionId, session.id),
+            eq(responses.slideId, slide.id),
+            eq(responses.participantId, participantId),
+            isNull(responses.deletedAt),
+          ),
+        )
+        .limit(1)
+    : [];
 
   return {
     id: slide.id,
     kind: slide.kind,
     config: stripAnswers(slide.kind, slide.config),
-    answered: answered !== null,
+    answered: answered !== undefined,
     index: index === -1 ? 0 : index,
     total: slides.length,
     selfPaced,
@@ -662,15 +907,15 @@ export async function participantSlideOf(
  * question from the one on the wall.
  */
 export async function moveParticipant(
-  session: SessionDoc,
-  participantId: Types.ObjectId,
+  session: Session,
+  participantId: string,
   direction: 'next' | 'previous',
 ): Promise<ParticipantSlide | null> {
   if (!isSelfPaced(session)) {
     throw new HttpError(409, 'The presenter is leading this session.', 'not_self_paced');
   }
 
-  const participant = await Participant.findById(participantId);
+  const participant = await getParticipant(participantId);
   if (!participant) {
     throw new HttpError(404, 'You are not in this session.', 'participant_not_found');
   }
@@ -693,9 +938,10 @@ export async function moveParticipant(
     return participantSlideOf(session, participantId);
   }
 
-  participant.currentSlideId = slides[target]?.id ?? null;
-  participant.lastSeenAt = new Date();
-  await participant.save();
+  await db
+    .update(participants)
+    .set({ currentSlideId: slides[target]?.id ?? null, lastSeenAt: new Date() })
+    .where(eq(participants.id, participant.id));
 
   return participantSlideOf(session, participantId);
 }

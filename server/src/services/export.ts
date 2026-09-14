@@ -1,5 +1,6 @@
-import type { Types } from 'mongoose';
-import { Response, Participant, type SessionDoc } from '../models/index.js';
+import { and, asc, eq, isNull } from 'drizzle-orm';
+import { db } from '../lib/db.js';
+import { responses, participants, type Session } from '../db/schema.js';
 import { definitionFor, type SlideKind } from '@pulse/shared';
 import * as sessions from './sessions.js';
 
@@ -146,19 +147,28 @@ function answerToText(kind: SlideKind, payload: unknown, config: Record<string, 
  * Long rather than wide: a wide sheet needs a column per slide and breaks
  * whenever a deck changes, while this shape opens cleanly in a pivot table.
  */
-export async function responsesCsv(session: SessionDoc): Promise<string> {
+export async function responsesCsv(session: Session): Promise<string> {
   const snapshot = sessions.snapshotOf(session);
 
-  const rows = await Response.find({ sessionId: session._id, deletedAt: null })
-    .select('slideId participantId kind payload isCorrect points submittedAt')
-    .sort({ submittedAt: 1 })
-    .lean();
+  const rows = await db
+    .select({
+      slideId: responses.slideId,
+      participantId: responses.participantId,
+      payload: responses.payload,
+      isCorrect: responses.isCorrect,
+      points: responses.points,
+      submittedAt: responses.submittedAt,
+    })
+    .from(responses)
+    .where(and(eq(responses.sessionId, session.id), isNull(responses.deletedAt)))
+    .orderBy(asc(responses.submittedAt));
 
-  const participants = await Participant.find({ sessionId: session._id })
-    .select('displayName')
-    .lean();
+  const people = await db
+    .select({ id: participants.id, displayName: participants.displayName })
+    .from(participants)
+    .where(eq(participants.sessionId, session.id));
 
-  const names = new Map(participants.map((p) => [p._id.toString(), p.displayName]));
+  const names = new Map(people.map((p) => [p.id, p.displayName]));
 
   const lines: string[] = [
     csvRow([
@@ -178,7 +188,7 @@ export async function responsesCsv(session: SessionDoc): Promise<string> {
     const slide = snapshot.slides[index];
     if (!slide) continue;
 
-    const participantId = (row.participantId as Types.ObjectId).toString();
+    const participantId = row.participantId;
 
     lines.push(
       csvRow([
@@ -201,7 +211,7 @@ export async function responsesCsv(session: SessionDoc): Promise<string> {
 }
 
 /** The final standings, for a quiz. */
-export async function leaderboardCsv(session: SessionDoc): Promise<string> {
+export async function leaderboardCsv(session: Session): Promise<string> {
   const entries = await sessions.leaderboardFor(session);
 
   const lines = [csvRow(['Rank', 'Name', 'Score', 'Correct', 'Answered'])];
@@ -216,7 +226,7 @@ export async function leaderboardCsv(session: SessionDoc): Promise<string> {
 }
 
 /** Everything, for anyone who would rather work with the raw shapes. */
-export async function sessionJson(session: SessionDoc): Promise<Record<string, unknown>> {
+export async function sessionJson(session: Session): Promise<Record<string, unknown>> {
   const snapshot = sessions.snapshotOf(session);
 
   const slides = await Promise.all(
@@ -235,12 +245,12 @@ export async function sessionJson(session: SessionDoc): Promise<Record<string, u
 
   return {
     session: {
-      id: session._id.toString(),
+      id: session.id,
       title: session.title,
       joinCode: session.joinCode,
       startedAt: session.startedAt,
       endedAt: session.endedAt,
-      participantCount: await sessions.countParticipants(session._id),
+      participantCount: await sessions.countParticipants(session.id),
     },
     slides,
     leaderboard: await sessions.leaderboardFor(session),
@@ -248,7 +258,7 @@ export async function sessionJson(session: SessionDoc): Promise<Record<string, u
 }
 
 /** A filename that sorts chronologically and is safe on every filesystem. */
-export function exportFilename(session: SessionDoc, kind: string, extension: string): string {
+export function exportFilename(session: Session, kind: string, extension: string): string {
   const date = session.startedAt.toISOString().slice(0, 10);
 
   const title = session.title

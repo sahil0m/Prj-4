@@ -1,11 +1,13 @@
+import { and, count, eq, inArray, isNotNull, lt, or } from 'drizzle-orm';
+import { db } from '../lib/db.js';
 import {
-  Deck,
-  Session,
-  Response,
-  Participant,
-  AudienceQuestion,
-  RefreshToken,
-} from '../models/index.js';
+  decks,
+  sessions,
+  participants,
+  responses,
+  audienceQuestions,
+  refreshTokens,
+} from '../db/schema.js';
 import { logger } from '../lib/logger.js';
 
 /**
@@ -65,53 +67,89 @@ export async function runCleanup(): Promise<CleanupReport> {
 
   /* ---------------- decks past their grace period ---------------- */
 
-  const deckCutoff = new Date(now - DECK_GRACE_DAYS * DAY_MS);
+  // The deck goes, but its sessions stay: their deck_id is set to null by the
+  // foreign key, because someone who deleted a deck did not ask to lose the
+  // record of the times they presented it.
+  const purgedDecks = await db
+    .delete(decks)
+    .where(
+      and(
+        isNotNull(decks.deletedAt),
+        lt(decks.deletedAt, new Date(now - DECK_GRACE_DAYS * DAY_MS)),
+      ),
+    )
+    .returning({ id: decks.id });
 
-  const oldDecks = await Deck.find({ deletedAt: { $ne: null, $lt: deckCutoff } })
-    .select('_id')
-    .lean();
-
-  if (oldDecks.length > 0) {
-    const ids = oldDecks.map((deck) => deck._id);
-
-    // The deck goes, but its sessions stay: someone who deleted a deck did
-    // not ask to lose the record of the times they presented it.
-    const result = await Deck.deleteMany({ _id: { $in: ids } });
-    report.decksPurged = result.deletedCount;
-  }
+  report.decksPurged = purgedDecks.length;
 
   /* ---------------- answers from long finished sessions ---------------- */
 
-  const responseCutoff = new Date(now - RESPONSE_RETENTION_DAYS * DAY_MS);
+  const old = await db
+    .select({ id: sessions.id })
+    .from(sessions)
+    .where(
+      and(
+        eq(sessions.state, 'closed'),
+        isNotNull(sessions.endedAt),
+        lt(sessions.endedAt, new Date(now - RESPONSE_RETENTION_DAYS * DAY_MS)),
+      ),
+    );
 
-  const oldSessions = await Session.find({
-    state: 'closed',
-    endedAt: { $ne: null, $lt: responseCutoff },
-  })
-    .select('_id')
-    .lean();
+  if (old.length > 0) {
+    const ids = old.map((row) => row.id);
 
-  if (oldSessions.length > 0) {
-    const ids = oldSessions.map((session) => session._id);
+    /*
+     * Counted before deleting, then removed through participants alone:
+     * responses and questions both reference a participant with ON DELETE
+     * CASCADE, so one statement takes all three and they can never be left
+     * pointing at someone who no longer exists. Inside a transaction so the
+     * counts reported are the rows actually removed.
+     */
+    await db.transaction(async (tx) => {
+      // One after another: a transaction is a single connection, and
+      // queries sent over it at once would only queue up anyway.
+      const responseCount = await tx
+        .select({ value: count() })
+        .from(responses)
+        .where(inArray(responses.sessionId, ids));
+      const participantCount = await tx
+        .select({ value: count() })
+        .from(participants)
+        .where(inArray(participants.sessionId, ids));
+      const questionCount = await tx
+        .select({ value: count() })
+        .from(audienceQuestions)
+        .where(inArray(audienceQuestions.sessionId, ids));
 
-    const [responses, participants, questions] = await Promise.all([
-      Response.deleteMany({ sessionId: { $in: ids } }),
-      Participant.deleteMany({ sessionId: { $in: ids } }),
-      AudienceQuestion.deleteMany({ sessionId: { $in: ids } }),
-    ]);
+      await tx.delete(participants).where(inArray(participants.sessionId, ids));
 
-    report.responsesPurged = responses.deletedCount;
-    report.participantsPurged = participants.deletedCount;
-    report.questionsPurged = questions.deletedCount;
+      report.responsesPurged = responseCount[0]?.value ?? 0;
+      report.participantsPurged = participantCount[0]?.value ?? 0;
+      report.questionsPurged = questionCount[0]?.value ?? 0;
+    });
   }
 
-  /* ---------------- revoked tokens ---------------- */
+  /* ---------------- refresh tokens ---------------- */
 
-  // The TTL index handles expiry; this catches tokens revoked long ago,
-  // which have no expiry to wait for.
+  /*
+   * MongoDB removed expired tokens itself, through a TTL index. Postgres has
+   * no such thing, so without this the table grows by a row on every refresh
+   * forever. Revoked tokens are kept for a month first, because a revoked
+   * token being presented again is the signal reuse detection relies on.
+   */
   const tokenCutoff = new Date(now - 30 * DAY_MS);
-  const tokens = await RefreshToken.deleteMany({ revokedAt: { $ne: null, $lt: tokenCutoff } });
-  report.tokensPurged = tokens.deletedCount;
+
+  const purgedTokens = await db
+    .delete(refreshTokens)
+    .where(
+      or(
+        lt(refreshTokens.expiresAt, new Date(now)),
+        and(isNotNull(refreshTokens.revokedAt), lt(refreshTokens.revokedAt, tokenCutoff)),
+      ),
+    )
+    .returning({ id: refreshTokens.id });
+
+  report.tokensPurged = purgedTokens.length;
 
   /* ---------------- sessions nobody closed ---------------- */
 
@@ -123,13 +161,18 @@ export async function runCleanup(): Promise<CleanupReport> {
    * Twelve hours would catch a long conference day; twenty-four will not
    * touch anything real.
    */
-  const staleCutoff = new Date(now - DAY_MS);
+  const closed = await db
+    .update(sessions)
+    .set({ state: 'closed', endedAt: new Date(), participationOpen: false })
+    .where(
+      and(
+        inArray(sessions.state, ['live', 'paused']),
+        lt(sessions.startedAt, new Date(now - DAY_MS)),
+      ),
+    )
+    .returning({ id: sessions.id });
 
-  const stale = await Session.updateMany(
-    { state: { $in: ['live', 'paused'] }, startedAt: { $lt: staleCutoff } },
-    { $set: { state: 'closed', endedAt: new Date(), participationOpen: false } },
-  );
-  report.staleSessionsClosed = stale.modifiedCount;
+  report.staleSessionsClosed = closed.length;
 
   const total =
     report.decksPurged +
