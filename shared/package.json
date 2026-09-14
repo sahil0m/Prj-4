@@ -9,8 +9,13 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./theme": {
+      "types": "./dist/theme/apply.d.ts",
+      "default": "./dist/theme/apply.js"
     }
   },
+  "sideEffects": false,
   "scripts": {
     "dev": "tsc --watch --preserveWatchOutput",
     "build": "tsc -p tsconfig.build.json",

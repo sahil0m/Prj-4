@@ -99,6 +99,7 @@ function candidates(): string[] {
 }
 
 let resolved: string | null = null;
+let alternatives: string[] = [];
 
 /**
  * The origin a phone should open, decided once at startup.
@@ -119,7 +120,19 @@ export async function resolveJoinOrigin(): Promise<string> {
   const configured = new URL(env.JOIN_ORIGIN);
   const port = configured.port === '' ? '5174' : configured.port;
 
-  const detected = (await routedAddress()) ?? candidates()[0] ?? null;
+  const routed = await routedAddress();
+  const everyAddress = candidates();
+
+  /*
+   * Every address, not just the best guess.
+   *
+   * A laptop on Wi-Fi and a phone hotspot at once has two, and only one of
+   * them reaches any given phone. Guessing wrong puts an address on the
+   * projector that nobody in the room can open, with no clue why -- which
+   * is exactly what happened. The presenter can now switch to another.
+   */
+  const ordered = routed ? [routed, ...everyAddress.filter((a) => a !== routed)] : everyAddress;
+  const detected = ordered[0] ?? null;
 
   if (detected === null) {
     // No network at all. Localhost at least works for someone testing on
@@ -133,6 +146,7 @@ export async function resolveJoinOrigin(): Promise<string> {
   }
 
   resolved = `http://${detected}:${port}`;
+  alternatives = ordered.map((address) => `http://${address}:${port}`);
 
   if (resolved !== env.JOIN_ORIGIN) {
     logger.info(
@@ -152,4 +166,15 @@ export async function resolveJoinOrigin(): Promise<string> {
  */
 export function joinOrigin(): string {
   return resolved ?? env.JOIN_ORIGIN;
+}
+
+/**
+ * Every address this machine can be reached at, best guess first.
+ *
+ * The presenter screen shows the first and lets someone pick another when
+ * the room cannot reach it. One entry means there is nothing to choose.
+ */
+export function joinOrigins(): string[] {
+  if (alternatives.length > 0) return alternatives;
+  return [joinOrigin()];
 }

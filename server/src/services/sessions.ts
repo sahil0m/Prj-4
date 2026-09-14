@@ -22,6 +22,7 @@ import {
   definitionFor,
   isAnswerable,
   scoreAnswer,
+  unknownIds,
   buildLeaderboard,
   zAnswer,
   type LeaderboardEntry,
@@ -375,9 +376,24 @@ export function allowsReactions(session: Session): boolean {
   return snapshotOf(session).settings?.reactions !== false;
 }
 
-/** Whether the audience may send questions. Off unless the author asked. */
+/**
+ * Whether the audience may send questions.
+ *
+ * Off unless the author asked -- except in a deck that contains a Q&A
+ * slide, where the whole point of the slide is to collect questions. A
+ * presenter who added one has asked for questions more clearly than any
+ * settings toggle could, and a Q&A slide with the Ask button hidden is a
+ * blank wall nobody can write on.
+ */
 export function allowsQuestions(session: Session): boolean {
-  return snapshotOf(session).settings?.chat === true;
+  const snapshot = snapshotOf(session);
+  if (snapshot.settings?.chat === true) return true;
+  return snapshot.slides.some((slide) => slide.kind === 'qa');
+}
+
+/** The deck's colours, frozen with the session, for the phone to match. */
+export function sessionTheme(session: Session): Record<string, unknown> | null {
+  return snapshotOf(session).theme ?? null;
 }
 
 /**
@@ -518,6 +534,24 @@ export async function recordAnswer(
       422,
       issue ? `${issue.path.join('.')}: ${issue.message}` : 'That answer was not valid.',
       'invalid_answer',
+    );
+  }
+
+  /*
+   * An answer must point at something the slide actually has.
+   *
+   * The schema checks the shape of an id, not whether it exists -- so a
+   * phone still holding a slide whose options were edited, or a crafted
+   * payload, could add to the total while matching no option. The room
+   * then sees answers arriving with every bar stuck at zero.
+   */
+  const missing = unknownIds(parsed.data, slide.config);
+
+  if (missing.length > 0) {
+    throw new HttpError(
+      409,
+      'That question has changed. Reload to get the current version.',
+      'stale_slide',
     );
   }
 

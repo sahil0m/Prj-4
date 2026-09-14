@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SessionState, ParticipantSlide } from '@pulse/shared';
+// Imported from the theme entry point rather than the package root: the
+// root pulls in the slide registry and every schema with it, which is
+// twenty kilobytes a phone has no use for.
+import { applyTheme, type DeckThemeLike } from '@pulse/shared/theme';
 import {
   SessionConnection,
   clearQueue,
@@ -53,6 +57,22 @@ export function App() {
   // What this deck allows. Buttons for a disabled feature are hidden rather
   // than shown and refused, which would look like a fault.
   const [allow, setAllow] = useState({ reactions: true, questions: false });
+
+  /*
+   * The deck's own colours.
+   *
+   * A deck styled in the editor used to look like the default on a phone,
+   * which is the screen most of the room is actually looking at.
+   */
+  const [theme, setTheme] = useState<DeckThemeLike | null>(null);
+
+  /*
+   * Applied to the page itself, not to a container: the background is
+   * painted on the body, so a light deck set on a container leaves the
+   * edges of a phone dark -- under the notch, and wherever a scroll
+   * bounces past the end.
+   */
+  useEffect(() => applyTheme(document.documentElement, theme), [theme]);
 
   const connection = useRef<SessionConnection | null>(null);
 
@@ -125,6 +145,7 @@ export function App() {
     showSlide(result.slide);
     setCollectNames(result.collectNames);
     setAllow({ reactions: result.allowReactions, questions: result.allowQuestions });
+    setTheme(result.theme);
 
     // Ask for a name only when the deck wants one and we do not have it yet.
     if (result.collectNames && result.displayName === '' && displayName === undefined) {
@@ -504,7 +525,12 @@ function QuizOutcome({ result }: { result: QuizResult }) {
 
       <p className={styles.waitingText}>
         {result.totalScore.toLocaleString()} points
-        {result.rank !== null ? ` \u00b7 ${ordinal(result.rank)} place` : ''}
+        {/* A place is only worth showing once there is a score behind it.
+            "0 points - 1st place" reads as a mistake, and being told you
+            lead on nothing is worse than being told nothing. */}
+        {result.rank !== null && result.totalScore > 0
+          ? ` \u00b7 ${ordinal(result.rank)} place`
+          : ''}
       </p>
     </div>
   );
@@ -545,15 +571,41 @@ function Cross() {
 }
 
 function ConnectionBadge({ status, pending }: { status: ConnectionStatus; pending: number }) {
-  if (status === 'connected' && pending === 0) {
+  /*
+   * A drop is only worth announcing once it lasts.
+   *
+   * A phone on mobile data loses its socket for a second at a time, and
+   * the client reconnects by itself. Putting "Reconnecting" on screen for
+   * every blip reads as something being wrong with the session, in the
+   * middle of a question. Answers are queued and sent on reconnect either
+   * way, so a moment of silence costs nothing.
+   */
+  const [shown, setShown] = useState(status);
+
+  useEffect(() => {
+    if (status === 'connected') {
+      setShown('connected');
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setShown(status);
+    }, 1500);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [status]);
+
+  if (shown === 'connected' && pending === 0) {
     return <span className={styles.badge} data-status="connected" aria-label="Connected" />;
   }
 
   return (
-    <span className={styles.badgeText} data-status={status}>
+    <span className={styles.badgeText} data-status={shown}>
       {pending > 0
         ? `${String(pending)} saved`
-        : status === 'connected'
+        : shown === 'connected'
           ? 'Online'
           : 'Reconnecting…'}
     </span>

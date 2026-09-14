@@ -7,7 +7,7 @@ import { sessions as sessionsTable, type Session } from '../db/schema.js';
 import { requireAuth, type AuthedRequest } from '../middleware/requireAuth.js';
 import * as sessions from '../services/sessions.js';
 import * as exports from '../services/export.js';
-import { joinOrigin } from '../lib/network.js';
+import { joinOrigin, joinOrigins } from '../lib/network.js';
 
 /**
  * Session lifecycle over HTTP.
@@ -222,7 +222,7 @@ export function sessionRoutes(): Router {
     void (async () => {
       try {
         const { format } = z
-          .object({ format: z.enum(['csv', 'leaderboard', 'json']).default('csv') })
+          .object({ format: z.enum(['csv', 'leaderboard', 'statistics', 'json']).default('csv') })
           .parse(req.query);
 
         const session = await sessions.findOwnedSession(req.params.sessionId, ownerOf(req));
@@ -242,7 +242,9 @@ export function sessionRoutes(): Router {
         const csv =
           format === 'leaderboard'
             ? await exports.leaderboardCsv(session)
-            : await exports.responsesCsv(session);
+            : format === 'statistics'
+              ? await exports.statisticsCsv(session)
+              : await exports.responsesCsv(session);
 
         const name = exports.exportFilename(session, format, 'csv');
 
@@ -277,6 +279,9 @@ function toPublicSession(session: Session) {
     theme: sessions.snapshotOf(session).theme,
     joinUrl: joinOrigin(),
     joinLink: `${joinOrigin()}/?code=${session.joinCode}`,
+    // Every address this machine has, so a presenter whose room cannot
+    // reach the first one can switch rather than guess.
+    joinUrls: joinOrigins(),
     state: session.state,
     mode: session.mode,
     currentSlideId: session.currentSlideId,

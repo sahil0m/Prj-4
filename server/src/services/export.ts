@@ -1,7 +1,7 @@
 import { and, asc, eq, isNull } from 'drizzle-orm';
 import { db } from '../lib/db.js';
 import { responses, participants, type Session } from '../db/schema.js';
-import { definitionFor, type SlideKind } from '@pulse/shared';
+import { definitionFor, type CountedItem, type SlideKind } from '@pulse/shared';
 import * as sessions from './sessions.js';
 
 /**
@@ -220,6 +220,81 @@ export async function leaderboardCsv(session: Session): Promise<string> {
     lines.push(
       csvRow([entry.rank, entry.displayName, entry.score, entry.correctCount, entry.answeredCount]),
     );
+  }
+
+  return lines.join('\r\n');
+}
+
+/**
+ * The statistics, one row per option.
+ *
+ * What a presenter is usually after afterwards: how many people were in the
+ * room, how many answered each question, and how the answers split. The
+ * per-answer export says who said what; this one says what the room said.
+ *
+ * Long rather than wide, like the answers export, so it opens straight into
+ * a pivot table without a column per option.
+ */
+export async function statisticsCsv(session: Session): Promise<string> {
+  const snapshot = sessions.snapshotOf(session);
+  const participants = await sessions.countParticipants(session.id);
+
+  const lines: string[] = [
+    csvRow([
+      'Slide number',
+      'Slide type',
+      'Question',
+      'Option',
+      'Answers',
+      'Share of answers',
+      'Correct option',
+      'People who answered',
+      'People in session',
+      'Response rate',
+    ]),
+  ];
+
+  for (const [index, slide] of snapshot.slides.entries()) {
+    const results = await sessions.resultsFor(session, slide.id);
+    if (!results) continue;
+
+    const definition = definitionFor(slide.kind);
+    const prompt = typeof slide.config.prompt === 'string' ? slide.config.prompt : '';
+    const rate = participants === 0 ? '' : `${((results.count / participants) * 100).toFixed(1)}%`;
+
+    const row = (option: string, count: number | '', share: string, correct: string) =>
+      csvRow([
+        index + 1,
+        definition.label,
+        prompt,
+        option,
+        count,
+        share,
+        correct,
+        results.count,
+        participants,
+        rate,
+      ]);
+
+    const data = results.data as { type: string; items?: CountedItem[] };
+
+    // Kinds that tally into options get a row each; everything else gets one
+    // row carrying its totals, so no slide is silently missing.
+    if (data.type === 'counts' && Array.isArray(data.items) && data.items.length > 0) {
+      for (const item of data.items) {
+        lines.push(
+          row(
+            item.label,
+            item.count,
+            `${item.percent.toFixed(1)}%`,
+            item.correct === true ? 'Yes' : item.correct === false ? 'No' : '',
+          ),
+        );
+      }
+      continue;
+    }
+
+    lines.push(row('', results.count, '', ''));
   }
 
   return lines.join('\r\n');

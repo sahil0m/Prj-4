@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { SlideKind } from '../slides/kinds.js';
 import type { LeaderboardEntry } from '../slides/scoring.js';
+import type { DeckThemeLike } from '../theme/apply.js';
 
 /**
  * The realtime contract.
@@ -260,6 +261,11 @@ export type JoinResult =
       /** Echoed back so a phone that was given a name keeps showing it. */
       displayName: string;
       collectNames: boolean;
+      /**
+       * The deck's colours, so the phone looks like the deck rather than
+       * like the default. Null when the deck never set one.
+       */
+      theme: DeckThemeLike | null;
       /** What the deck allows, so a phone hides what it cannot use. */
       allowReactions: boolean;
       allowQuestions: boolean;

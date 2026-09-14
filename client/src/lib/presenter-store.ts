@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { io, type Socket } from 'socket.io-client';
 import type {
+  DeckThemeLike,
   ServerEvents,
   ClientEvents,
   SessionState,
@@ -42,10 +43,12 @@ export interface PresenterSession {
   joinCode: string;
   joinSlug: string;
   joinUrl: string;
+  joinUrls: string[];
   joinLink: string;
   state: string;
   /** Chosen in the editor; drives the accent the room sees. */
-  theme?: { preset?: string; accent?: string; mode?: string };
+  /** The deck's colours, frozen with the session. */
+  theme?: DeckThemeLike;
   currentSlideId: string | null;
 }
 

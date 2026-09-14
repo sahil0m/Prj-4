@@ -10,7 +10,7 @@ import {
   Loader2,
   FileSpreadsheet,
   Trophy,
-  Braces,
+  BarChart3,
 } from 'lucide-react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { api, type PastSession } from '../lib/api';
@@ -61,7 +61,7 @@ export function History() {
 
   const filtered = from !== '' || to !== '';
 
-  const download = (sessionId: string, format: 'csv' | 'leaderboard' | 'json') => {
+  const download = (sessionId: string, format: 'csv' | 'leaderboard' | 'statistics') => {
     // A navigation rather than fetch-and-blob: the response carries a
     // Content-Disposition header, so the browser names the file correctly
     // and nothing is held in memory.
@@ -213,13 +213,13 @@ export function History() {
                           <DropdownMenu.Item
                             className={styles.menuItem}
                             onSelect={() => {
-                              download(session.id, 'json');
+                              download(session.id, 'statistics');
                             }}
                           >
-                            <Braces size={15} />
+                            <BarChart3 size={15} />
                             <span>
-                              Everything
-                              <span className={styles.menuHint}>JSON, all results</span>
+                              Statistics
+                              <span className={styles.menuHint}>CSV, counts per question</span>
                             </span>
                           </DropdownMenu.Item>
                         </DropdownMenu.Content>

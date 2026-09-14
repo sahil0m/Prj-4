@@ -18,8 +18,18 @@ import {
   Loader2,
   Eye as EyeIcon,
   CheckCircle2,
+  Check,
+  Copy,
 } from 'lucide-react';
-import { definitionFor, type SlideKind } from '@pulse/shared';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import {
+  definitionFor,
+  type CountedItem,
+  type ResultData,
+  type SlideKind,
+  type SlideResults,
+} from '@pulse/shared';
+import { applyTheme } from '@pulse/shared/theme';
 import { usePresenter } from '../lib/presenter-store';
 import { Results } from '../components/Results';
 import { Leaderboard } from '../components/Leaderboard';
@@ -81,9 +91,19 @@ export function Presenter() {
    */
   const [revealed, setRevealed] = useState<Set<string>>(new Set());
 
+  /*
+   * Which address the room is told to open.
+   *
+   * A laptop on Wi-Fi and a phone hotspot at once has more than one, and
+   * only one of them reaches any given phone. The server puts its best
+   * guess first; this is the presenter's way to correct it without
+   * restarting anything.
+   */
+  const [chosenAddress, setChosenAddress] = useState<string | null>(null);
+
   const aiAvailable = useAiAvailable();
 
-  const download = (format: 'csv' | 'leaderboard' | 'json') => {
+  const download = (format: 'csv' | 'leaderboard' | 'statistics') => {
     if (!sessionId) return;
     // A plain navigation rather than fetch-and-blob: the response carries a
     // Content-Disposition header, so the browser saves it under the right
@@ -97,6 +117,22 @@ export function Presenter() {
       close();
     };
   }, [sessionId, open, close]);
+
+  /*
+   * The deck's own theme, applied to the page itself.
+   *
+   * On the root rather than this component's container, because the
+   * background is painted on the body -- a deck with a light background set
+   * on a container leaves a dark frame around the slide. Undone when the
+   * presenter leaves, so the rest of the app keeps its own colours.
+   *
+   * Only the accent used to be applied at all, so a deck's background, font
+   * and light mode were chosen in the editor and then ignored on the screen
+   * the room looks at.
+   */
+  const deckTheme = session?.theme ?? null;
+
+  useEffect(() => applyTheme(document.documentElement, deckTheme), [deckTheme]);
 
   /* ---------------- keyboard ---------------- */
 
@@ -199,32 +235,20 @@ export function Presenter() {
 
   // The server tells us where the audience should go. The browser cannot:
   // this tab may be on localhost, which no other device can reach.
-  const joinUrl = session.joinUrl.replace(/^https?:\/\//, '');
-
-  // The deck's own accent, applied as a variable override rather than a
-  // class: every component below already reads --color-accent, so nothing
-  // needs to know a theme exists.
-  const accent = typeof session.theme?.accent === 'string' ? session.theme.accent : null;
+  const addresses = session.joinUrls.length > 0 ? session.joinUrls : [session.joinUrl];
+  const address =
+    chosenAddress && addresses.includes(chosenAddress)
+      ? chosenAddress
+      : (addresses[0] ?? session.joinUrl);
+  const setAddress = setChosenAddress;
 
   return (
-    <div
-      className={styles.page}
-      data-fullscreen={fullscreen}
-      style={
-        accent === null
-          ? undefined
-          : ({
-              '--color-accent': accent,
-              '--accent-gradient': `linear-gradient(135deg, ${accent}, color-mix(in srgb, ${accent} 55%, #000))`,
-              '--accent-glow': `0 8px 28px color-mix(in srgb, ${accent} 35%, transparent)`,
-            } as React.CSSProperties)
-      }
-    >
+    <div className={styles.page} data-fullscreen={fullscreen}>
       {/* ---------------- top bar ---------------- */}
       <header className={styles.top}>
         <div className={styles.joinInfo}>
           <span className={styles.joinLabel}>Join at</span>
-          <span className={styles.joinUrl}>{joinUrl}</span>
+          <span className={styles.joinUrl}>{address.replace(/^https?:\/\//, '')}</span>
           <span className={styles.joinCodeBox}>{formatCode(session.joinCode)}</span>
         </div>
 
@@ -260,11 +284,13 @@ export function Presenter() {
             transition={{ duration: 0.3 }}
           >
             <div className={styles.qrBox}>
-              <QrCode value={session.joinLink} size={168} />
+              <QrCode value={`${address}/?code=${session.joinCode}`} size={168} />
             </div>
             <p className={styles.joinPanelHint}>Scan to join, or go to</p>
-            <p className={styles.joinPanelUrl}>{joinUrl}</p>
+            <p className={styles.joinPanelUrl}>{address.replace(/^https?:\/\//, '')}</p>
             <p className={styles.joinPanelCode}>{formatCode(session.joinCode)}</p>
+
+            <JoinAddressPicker addresses={session.joinUrls} value={address} onChange={setAddress} />
           </motion.aside>
         )}
       </AnimatePresence>
@@ -317,14 +343,24 @@ export function Presenter() {
                   <span>{results?.count ?? 0} answers so far</span>
                 </div>
               ) : (
-                <Results
-                  results={results}
-                  onRemove={removeResponse}
-                  // A quiz only reveals which answer was right once the
-                  // presenter says so; showing it while people are still
-                  // answering would give the game away on the big screen.
-                  revealCorrect={isQuizSlide && slide !== undefined && revealed.has(slide.id)}
-                />
+                <>
+                  <Results
+                    results={results}
+                    onRemove={removeResponse}
+                    // A quiz only reveals which answer was right once the
+                    // presenter says so; showing it while people are still
+                    // answering would give the game away on the big screen.
+                    revealCorrect={isQuizSlide && slide !== undefined && revealed.has(slide.id)}
+                  />
+
+                  {results && results.count > 0 && (
+                    <ResultStats
+                      results={results}
+                      participantCount={state?.participantCount ?? 0}
+                      revealed={slide !== undefined && revealed.has(slide.id)}
+                    />
+                  )}
+                </>
               )}
             </div>
           </motion.div>
@@ -444,17 +480,56 @@ export function Presenter() {
             }}
           />
 
-          <button
-            type="button"
-            className={styles.controlButton}
-            onClick={() => {
-              download(hasQuiz ? 'leaderboard' : 'csv');
-            }}
-            title="Download the results"
-          >
-            <Download size={18} />
-            <span className={styles.controlLabel}>Export</span>
-          </button>
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger asChild>
+              <button
+                type="button"
+                className={styles.controlButton}
+                title="Download the results as a spreadsheet"
+              >
+                <Download size={18} />
+                <span className={styles.controlLabel}>Export</span>
+              </button>
+            </DropdownMenu.Trigger>
+
+            <DropdownMenu.Portal>
+              <DropdownMenu.Content className={styles.menu} sideOffset={8} align="end">
+                {/* Every export is a CSV: it opens in Excel, Numbers and
+                    Sheets without anyone being told how. */}
+                <DropdownMenu.Item
+                  className={styles.menuItem}
+                  onSelect={() => {
+                    download('csv');
+                  }}
+                >
+                  Answers (CSV)
+                  <span className={styles.menuHint}>One row per answer</span>
+                </DropdownMenu.Item>
+
+                <DropdownMenu.Item
+                  className={styles.menuItem}
+                  onSelect={() => {
+                    download('statistics');
+                  }}
+                >
+                  Statistics (CSV)
+                  <span className={styles.menuHint}>Counts and shares per question</span>
+                </DropdownMenu.Item>
+
+                {hasQuiz && (
+                  <DropdownMenu.Item
+                    className={styles.menuItem}
+                    onSelect={() => {
+                      download('leaderboard');
+                    }}
+                  >
+                    Leaderboard (CSV)
+                    <span className={styles.menuHint}>Final scores</span>
+                  </DropdownMenu.Item>
+                )}
+              </DropdownMenu.Content>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Root>
 
           <button
             type="button"
@@ -523,6 +598,147 @@ export function Presenter() {
             </div>
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Join address                                                        */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Lets the presenter switch which address the room is told to open.
+ *
+ * Only shown when the machine has more than one. The server cannot tell
+ * which network the audience's phones are on -- a laptop on Wi-Fi with a
+ * phone hotspot attached has two, and the wrong one is unreachable with no
+ * explanation on screen.
+ */
+function JoinAddressPicker({
+  addresses,
+  value,
+  onChange,
+}: {
+  addresses: string[];
+  value: string;
+  onChange: (address: string) => void;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  const copy = () => {
+    void navigator.clipboard
+      .writeText(value)
+      .then(() => {
+        setCopied(true);
+        setTimeout(() => {
+          setCopied(false);
+        }, 1600);
+      })
+      .catch(() => {
+        toast.error('Could not copy that address.');
+      });
+  };
+
+  return (
+    <div className={styles.addressRow}>
+      <button type="button" className={styles.addressCopy} onClick={copy}>
+        {copied ? <Check size={13} /> : <Copy size={13} />}
+        {copied ? 'Copied' : 'Copy link'}
+      </button>
+
+      {addresses.length > 1 && (
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger asChild>
+            <button type="button" className={styles.addressCopy} title="Use a different network">
+              Wrong address?
+            </button>
+          </DropdownMenu.Trigger>
+
+          <DropdownMenu.Portal>
+            <DropdownMenu.Content className={styles.menu} sideOffset={6} align="center">
+              <p className={styles.menuNote}>
+                This machine is on more than one network. Pick the one the room can reach.
+              </p>
+
+              {addresses.map((option) => (
+                <DropdownMenu.Item
+                  key={option}
+                  className={styles.menuItem}
+                  data-active={option === value}
+                  onSelect={() => {
+                    onChange(option);
+                  }}
+                >
+                  {option.replace(/^https?:\/\//, '')}
+                  {option === value && <Check size={14} />}
+                </DropdownMenu.Item>
+              ))}
+            </DropdownMenu.Content>
+          </DropdownMenu.Portal>
+        </DropdownMenu.Root>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Statistics                                                          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The numbers behind the chart.
+ *
+ * A bar chart shows the shape of the answers; this says how much of the
+ * room they speak for. "100%" means nothing without knowing whether one
+ * person answered or forty, and a presenter deciding whether to move on
+ * needs the count, not the share.
+ */
+function ResultStats({
+  results,
+  participantCount,
+  revealed,
+}: {
+  results: SlideResults;
+  participantCount: number;
+  revealed: boolean;
+}) {
+  const data = results.data as ResultData;
+  const items: CountedItem[] = data.type === 'counts' ? data.items : [];
+
+  const correct = items.filter((item) => item.correct === true);
+  const hasKey = items.some((item) => item.correct !== undefined);
+
+  const correctCount = correct.reduce((sum, item) => sum + item.count, 0);
+  const rate = participantCount === 0 ? null : Math.round((results.count / participantCount) * 100);
+
+  return (
+    <div className={styles.stats}>
+      <span className={styles.stat}>
+        <strong>{results.count.toLocaleString()}</strong>
+        {results.count === 1 ? ' answer' : ' answers'}
+      </span>
+
+      {participantCount > 0 && (
+        <span className={styles.stat}>
+          <strong>
+            {results.count} of {participantCount}
+          </strong>
+          {' answered'}
+          {rate !== null && <span className={styles.statRate}>{rate}%</span>}
+        </span>
+      )}
+
+      {/* Only once the room has been told, or this would give the answer
+          away from the corner of the screen. */}
+      {hasKey && revealed && results.count > 0 && (
+        <span className={styles.stat} data-tone="correct">
+          <strong>{correctCount}</strong>
+          {' correct'}
+          <span className={styles.statRate}>
+            {Math.round((correctCount / results.count) * 100)}%
+          </span>
+        </span>
       )}
     </div>
   );

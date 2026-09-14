@@ -162,6 +162,7 @@ export function attachRealtime(
             slide,
             displayName: participant.displayName,
             collectNames: sessions.collectsNames(session),
+            theme: sessions.sessionTheme(session),
             allowReactions: sessions.allowsReactions(session),
             allowQuestions: sessions.allowsQuestions(session),
           };

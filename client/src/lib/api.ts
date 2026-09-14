@@ -454,6 +454,8 @@ export interface LiveSession {
   joinSlug: string;
   /** Where the audience should go, as the server knows itself. */
   joinUrl: string;
+  /** Every address this machine can be reached at, best guess first. */
+  joinUrls: string[];
   /** The same, with the code already filled in — used for the QR code. */
   joinLink: string;
   state: string;
