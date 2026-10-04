@@ -18,6 +18,7 @@
     "realtime:verify": "tsx src/scripts/verify-realtime.ts",
     "session:verify": "tsx src/scripts/verify-session.ts",
     "images:verify": "tsx src/scripts/verify-images.ts",
+    "load:test": "tsx src/scripts/load-test.ts",
     "admin:grant": "tsx src/scripts/make-admin.ts",
     "cleanup:verify": "tsx src/scripts/verify-cleanup.ts",
     "where": "tsx src/scripts/where.ts"

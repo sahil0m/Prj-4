@@ -795,6 +795,39 @@ export async function leaderboardFor(
   );
 }
 
+/**
+ * One person's score and where it places them.
+ *
+ * Answering a quiz used to build the whole leaderboard to tell one phone
+ * its own rank -- every answer reading every scored answer in the room, so
+ * a hall of four hundred did that four hundred times. This asks the
+ * database the question directly instead: one row, two numbers.
+ */
+export async function standingOf(
+  session: Session,
+  participantId: string,
+): Promise<{ score: number; rank: number | null }> {
+  if (!isId(participantId)) return { score: 0, rank: null };
+
+  const [row] = await db
+    .execute<{ score: number; rank: number }>(
+      sql`
+    WITH totals AS (
+      SELECT participant_id, COALESCE(sum(points), 0) AS score
+      FROM responses
+      WHERE session_id = ${session.id} AND deleted_at IS NULL AND points IS NOT NULL
+      GROUP BY participant_id
+    )
+    SELECT score::double precision AS score, rank::int AS rank
+    FROM (SELECT participant_id, score, rank() OVER (ORDER BY score DESC) AS rank FROM totals) ranked
+    WHERE participant_id = ${participantId}
+  `,
+    )
+    .then((result) => result.rows);
+
+  return row ? { score: row.score, rank: row.rank } : { score: 0, rank: null };
+}
+
 export async function removeResponse(
   sessionId: string,
   ownerId: string,
@@ -930,6 +963,87 @@ export async function participantSlideOf(
     index: index === -1 ? 0 : index,
     total: slides.length,
     selfPaced,
+  };
+}
+
+/**
+ * The slide payload for a whole room at once.
+ *
+ * Telling everyone to move used to ask the database about each phone in
+ * turn -- a query per person, so a hall of four hundred meant four hundred
+ * round trips before the last of them saw the question. Only `answered`
+ * differs between people, so that is the only thing worth asking per
+ * person, and it is one query for all of them.
+ *
+ * Returns a function rather than a map so the caller reads it per socket
+ * exactly as it did before.
+ */
+export async function participantSlidesFor(
+  session: Session,
+  participantIds: string[],
+): Promise<(participantId: string) => ParticipantSlide | null> {
+  const selfPaced = isSelfPaced(session);
+  const slides = snapshotOf(session).slides;
+
+  /*
+   * A self-paced room is the one case where people are genuinely looking
+   * at different slides, so their positions are read together too.
+   */
+  const positions = new Map<string, string | null>();
+
+  if (selfPaced && participantIds.length > 0) {
+    const rows = await db
+      .select({ id: participants.id, currentSlideId: participants.currentSlideId })
+      .from(participants)
+      .where(inArray(participants.id, participantIds));
+
+    for (const row of rows) positions.set(row.id, row.currentSlideId);
+  }
+
+  const slideIds = selfPaced
+    ? [...new Set([...positions.values(), session.currentSlideId].filter((id) => id !== null))]
+    : session.currentSlideId
+      ? [session.currentSlideId]
+      : [];
+
+  // Who has already answered each slide anyone is looking at.
+  const answered = new Set<string>();
+
+  if (slideIds.length > 0 && participantIds.length > 0) {
+    const rows = await db
+      .select({ participantId: responses.participantId, slideId: responses.slideId })
+      .from(responses)
+      .where(
+        and(
+          eq(responses.sessionId, session.id),
+          inArray(responses.slideId, slideIds),
+          inArray(responses.participantId, participantIds),
+          isNull(responses.deletedAt),
+        ),
+      );
+
+    for (const row of rows) answered.add(`${row.participantId}:${row.slideId}`);
+  }
+
+  return (participantId) => {
+    const slideId = selfPaced
+      ? (positions.get(participantId) ?? session.currentSlideId)
+      : session.currentSlideId;
+
+    const slide = slideOf(session, slideId);
+    if (!slide) return null;
+
+    const index = slides.findIndex((s) => s.id === slide.id);
+
+    return {
+      id: slide.id,
+      kind: slide.kind,
+      config: stripAnswers(slide.kind, slide.config),
+      answered: answered.has(`${participantId}:${slide.id}`),
+      index: index === -1 ? 0 : index,
+      total: slides.length,
+      selfPaced,
+    };
   };
 }
 

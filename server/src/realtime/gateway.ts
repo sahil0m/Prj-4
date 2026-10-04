@@ -96,13 +96,107 @@ class RateLimiter {
   }
 }
 
+/** The socket server, with this product's own event names on it. */
+type GatewayServer = Server<ClientEvents, ServerEvents, Record<string, never>, SocketContext>;
+
+/**
+ * Sends at most one of a thing every so often.
+ *
+ * A lecture hall answers together: two hundred people look up at the same
+ * question and tap within a few seconds. Recomputing the tally and the
+ * standings for every one of those answers, and broadcasting each, is work
+ * that grows with the square of the room -- four hundred students meant
+ * four hundred leaderboards of four hundred entries, a hundred and sixty
+ * thousand rows serialised into one burst, while everyone waits.
+ *
+ * Nobody can read four hundred updates a second anyway. The first one goes
+ * out immediately, so a quiet room still feels instant, and the rest are
+ * collapsed into one at the end of each window -- the last of which always
+ * runs, so the final figures are never the second-to-last ones.
+ */
+class Coalescer {
+  private readonly pending = new Map<string, () => Promise<void>>();
+  private readonly timers = new Map<string, NodeJS.Timeout>();
+
+  constructor(private readonly windowMs: number) {}
+
+  /** Runs `work` now if this key is idle, otherwise at the end of the window. */
+  run(key: string, work: () => Promise<void>): void {
+    if (this.timers.has(key)) {
+      // Something is already scheduled: keep only the newest work, since
+      // each run reads the current state and supersedes the last.
+      this.pending.set(key, work);
+      return;
+    }
+
+    void this.fire(key, work);
+
+    this.timers.set(
+      key,
+      setTimeout(() => {
+        this.timers.delete(key);
+        const queued = this.pending.get(key);
+        this.pending.delete(key);
+        if (queued) this.run(key, queued);
+      }, this.windowMs),
+    );
+  }
+
+  private async fire(key: string, work: () => Promise<void>): Promise<void> {
+    try {
+      await work();
+    } catch (err) {
+      // A failed broadcast must not take the socket down with it; the next
+      // answer schedules another.
+      logger.error({ err, key }, 'Broadcast failed');
+    }
+  }
+
+  /** Stops every pending run. Used when the process is shutting down. */
+  clear(): void {
+    for (const timer of this.timers.values()) clearTimeout(timer);
+    this.timers.clear();
+    this.pending.clear();
+  }
+}
+
+/*
+ * A tally can move several times a second without anyone minding; the
+ * standings are a bigger payload and a slower read, so they move less
+ * often. Both are well inside what reads as live in a room.
+ */
+const resultsBroadcast = new Coalescer(150);
+const leaderboardBroadcast = new Coalescer(400);
+
+/*
+ * The head count moves fastest of all: a lecture hall does not trickle in,
+ * it arrives in the thirty seconds after the code goes up on the screen.
+ * Sent per arrival it is quadratic in the worst possible place -- eight
+ * hundred students joining meant six hundred and forty thousand messages,
+ * each one redrawing a number on every phone in the room, and the last
+ * person to join waited seven seconds for it.
+ *
+ * A quarter second is below what anyone notices in a number ticking up.
+ */
+const countBroadcast = new Coalescer(250);
+
+/** Sends the current head count to the room, at most every so often. */
+function announceCount(io: GatewayServer, sessionId: string): void {
+  countBroadcast.run(sessionId, async () => {
+    // Read inside the run, so the figure sent is the one that is true
+    // when it is sent rather than when it was scheduled.
+    const count = await sessions.countParticipants(sessionId);
+    io.to(room.presenters(sessionId))
+      .to(room.participants(sessionId))
+      .emit('participants:count', { count });
+  });
+}
+
 const answerLimit = new RateLimiter(30, 60_000);
 const reactionLimit = new RateLimiter(20, 10_000);
 const joinLimit = new RateLimiter(10, 60_000);
 
-export function attachRealtime(
-  httpServer: HttpServer,
-): Server<ClientEvents, ServerEvents, Record<string, never>, SocketContext> {
+export function attachRealtime(httpServer: HttpServer): GatewayServer {
   const io = new Server<ClientEvents, ServerEvents, Record<string, never>, SocketContext>(
     httpServer,
     {
@@ -168,10 +262,9 @@ export function attachRealtime(
           };
           ack(result);
 
-          // Everyone watching sees the room fill up.
-          io.to(room.presenters(context.sessionId))
-            .to(room.participants(context.sessionId))
-            .emit('participants:count', { count });
+          // Everyone watching sees the room fill up. The joiner already has
+          // the figure in their own acknowledgement, so nobody waits on this.
+          announceCount(io, context.sessionId);
         } catch (err) {
           ack(toAck(err) as JoinResult);
         }
@@ -215,15 +308,25 @@ export function attachRealtime(
           // on every presenter screen.
           if (duplicate) return;
 
-          const results = await sessions.resultsFor(session, input.slideId);
-          if (results) {
+          /*
+           * The tally is recomputed on a schedule rather than per answer.
+           * Every answer is still counted -- the next run reads the
+           * database, so it includes everything that arrived meanwhile.
+           */
+          resultsBroadcast.run(`${sessionId}:${input.slideId}`, async () => {
+            const current = await sessions.getSession(sessionId);
+            if (!current) return;
+
+            const results = await sessions.resultsFor(current, input.slideId);
+            if (!results) return;
+
             io.to(room.presenters(sessionId)).emit('results:update', results);
 
-            const settings = sessions.snapshotOf(session).settings ?? {};
+            const settings = sessions.snapshotOf(current).settings ?? {};
             if (settings.showResultsToParticipants === true) {
               io.to(room.participants(sessionId)).emit('results:update', results);
             }
-          }
+          });
 
           io.to(room.presenters(sessionId)).emit('response:new', {
             slideId: input.slideId,
@@ -236,20 +339,28 @@ export function attachRealtime(
           const slide = sessions.slideOf(session, input.slideId);
 
           if (slide && definitionFor(slide.kind).isQuiz) {
-            const entries = await sessions.leaderboardFor(session);
-            io.to(room.presenters(sessionId)).emit('leaderboard:update', { entries });
+            leaderboardBroadcast.run(sessionId, async () => {
+              const current = await sessions.getSession(sessionId);
+              if (!current) return;
 
-            const mine = entries.find((entry) => entry.participantId === participantId);
+              const entries = await sessions.leaderboardFor(current);
+              io.to(room.presenters(sessionId)).emit('leaderboard:update', { entries });
+            });
+
+            /*
+             * This phone's own result is not coalesced: it is one small
+             * message to one person who is waiting to see whether they got
+             * it right, and it costs nothing to send immediately.
+             */
             const stored = await sessions.scoreOf(responseId);
+            const standing = await sessions.standingOf(session, participantId);
 
-            // Only to this socket: a phone that could see the whole board
-            // would turn the quiz into a copying exercise.
             socket.emit('quiz:result', {
               slideId: input.slideId,
               correct: stored?.isCorrect === true,
               points: stored?.points ?? 0,
-              totalScore: mine?.score ?? 0,
-              rank: mine?.rank ?? null,
+              totalScore: standing.score,
+              rank: standing.rank,
             });
           }
         } catch (err) {
@@ -550,14 +661,7 @@ export function attachRealtime(
 
       // The count is of people who joined, not sockets currently open: a
       // phone that locks its screen has not left the room.
-      void (async () => {
-        try {
-          const count = await sessions.countParticipants(sessionId);
-          io.to(room.presenters(sessionId)).emit('participants:count', { count });
-        } catch {
-          // A disconnect during shutdown is not worth logging.
-        }
-      })();
+      announceCount(io, sessionId);
     });
   });
 
@@ -616,10 +720,7 @@ async function requirePresenter(context: SocketContext): Promise<Session> {
   return session;
 }
 
-async function broadcastState(
-  io: Server<ClientEvents, ServerEvents, Record<string, never>, SocketContext>,
-  session: Session,
-): Promise<void> {
+async function broadcastState(io: GatewayServer, session: Session): Promise<void> {
   const sessionId = session.id;
   const count = await sessions.countParticipants(session.id);
   const state = sessions.toSessionState(session, count);
@@ -634,23 +735,26 @@ async function broadcastState(
  * person — one phone should show a thank-you while another still shows the
  * question.
  */
-async function broadcastSlide(
-  io: Server<ClientEvents, ServerEvents, Record<string, never>, SocketContext>,
-  session: Session,
-): Promise<void> {
+async function broadcastSlide(io: GatewayServer, session: Session): Promise<void> {
   await broadcastState(io, session);
 
   const sessionId = session.id;
   const sockets = await io.in(room.participants(sessionId)).fetchSockets();
 
+  // A socket in the participants room always has an id; any that somehow
+  // does not is skipped rather than guessed at.
+  const participantIds = sockets
+    .map((participantSocket) => participantSocket.data.participantId)
+    .filter((id): id is string => id !== undefined);
+
+  // One pair of queries for the whole room, rather than a pair per phone.
+  const slideFor = await sessions.participantSlidesFor(session, participantIds);
+
   for (const participantSocket of sockets) {
     const { participantId } = participantSocket.data;
-    // A socket in the participants room always has an id; skip rather than
-    // guess if one somehow does not.
     if (!participantId) continue;
 
-    const slide = await sessions.participantSlideOf(session, participantId);
-    participantSocket.emit('slide:show', slide);
+    participantSocket.emit('slide:show', slideFor(participantId));
   }
 
   if (session.currentSlideId) {
@@ -666,6 +770,19 @@ async function broadcastSlide(
     const entries = await sessions.leaderboardFor(session);
     io.to(room.presenters(sessionId)).emit('leaderboard:update', { entries });
   }
+}
+
+/**
+ * Stops every broadcast still waiting on its window.
+ *
+ * Called before the database closes: a run that fired afterwards would
+ * query a pool that is gone, and its timer would hold the process open
+ * past the point where it was asked to stop.
+ */
+export function stopBroadcasts(): void {
+  resultsBroadcast.clear();
+  leaderboardBroadcast.clear();
+  countBroadcast.clear();
 }
 
 export const realtimeInternals = { RateLimiter, isProduction };

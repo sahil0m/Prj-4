@@ -3,7 +3,7 @@ import { env } from './config.js';
 import { logger } from './lib/logger.js';
 import { connectDb, disconnectDb } from './lib/db.js';
 import { createApp } from './app.js';
-import { attachRealtime } from './realtime/gateway.js';
+import { attachRealtime, stopBroadcasts } from './realtime/gateway.js';
 import { startCleanup } from './jobs/cleanup.js';
 import { resolveJoinOrigin } from './lib/network.js';
 
@@ -88,6 +88,7 @@ async function main(): Promise<void> {
     forceExit.unref();
 
     stopCleanup();
+    stopBroadcasts();
 
     // Sockets first: a phone told the session is closing can show that,
     // where a socket killed with the process just looks like a crash.
