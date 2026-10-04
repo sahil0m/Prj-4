@@ -18,7 +18,8 @@ interface FormField {
   label: string;
   type?: string;
   required?: boolean;
-  options?: { id: string; label: string }[];
+  /** The choices of a select field, as the schema stores them: plain strings. */
+  options?: string[];
 }
 
 /**
@@ -66,24 +67,30 @@ export function QuickFormInput({
             {field.required === true && <span className={formStyles.required}>required</span>}
           </label>
 
-          {field.type === 'choice' && field.options ? (
+          {/*
+            The type names come from the field's own schema: text, email,
+            number, select, checkbox. This used to look for 'choice' and
+            'boolean', which the schema has never produced -- so a dropdown
+            and a tick box both rendered as a plain text box.
+          */}
+          {field.type === 'select' && field.options && field.options.length > 0 ? (
             <div className={formStyles.choices}>
               {field.options.map((option) => (
                 <button
-                  key={option.id}
+                  key={option}
                   type="button"
                   className={formStyles.choice}
-                  data-picked={values[field.id] === option.id}
+                  data-picked={values[field.id] === option}
                   disabled={disabled}
                   onClick={() => {
-                    set(field.id, option.id);
+                    set(field.id, option);
                   }}
                 >
-                  {option.label}
+                  {option}
                 </button>
               ))}
             </div>
-          ) : field.type === 'boolean' ? (
+          ) : field.type === 'checkbox' ? (
             <button
               type="button"
               className={formStyles.toggle}
@@ -101,7 +108,11 @@ export function QuickFormInput({
               className={formStyles.input}
               // inputMode rather than type=number: the numeric keypad
               // without the spinner arrows, which are unusable on a phone.
-              inputMode={field.type === 'number' ? 'decimal' : 'text'}
+              type={field.type === 'email' ? 'email' : 'text'}
+              inputMode={
+                field.type === 'number' ? 'decimal' : field.type === 'email' ? 'email' : 'text'
+              }
+              autoComplete={field.type === 'email' ? 'email' : 'off'}
               value={String(values[field.id] ?? '')}
               maxLength={1000}
               disabled={disabled}

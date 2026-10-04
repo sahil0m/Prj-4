@@ -150,6 +150,20 @@ function ChoiceInput({
               toggle(option.id);
             }}
           >
+            {/* The picture is the choice on an Image Choice slide, so it
+                leads. Without it this slide was a Multiple Choice with
+                extra steps -- the images were set in the editor and then
+                never shown to anyone. */}
+            {option.imageUrl !== undefined && option.imageUrl !== '' && (
+              <img
+                className={styles.optionImage}
+                src={option.imageUrl}
+                alt=""
+                loading="lazy"
+                draggable={false}
+              />
+            )}
+
             <span className={styles.optionKey}>{String.fromCharCode(65 + i)}</span>
             <span className={styles.optionLabel}>{option.label || `Option ${String(i + 1)}`}</span>
           </button>

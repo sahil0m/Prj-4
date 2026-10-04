@@ -16,6 +16,14 @@ export interface CountedItem {
   /** 0–100, rounded to one decimal. */
   percent: number;
   correct?: boolean;
+  /**
+   * The option's picture, where it has one.
+   *
+   * Carried through so an Image Choice result shows the images people were
+   * choosing between. Without it the room picks between pictures and then
+   * sees a chart of text, with no way to tell which bar was which.
+   */
+  imageUrl?: string;
 }
 
 export interface WordTally {
@@ -174,7 +182,7 @@ function round(value: number, places = 2): number {
 /** Counts by id, preserving the order options were defined in. */
 function tallyIds(
   ids: string[][],
-  options: { id: string; label: string; correct?: boolean }[],
+  options: { id: string; label: string; correct?: boolean; imageUrl?: string }[],
 ): { items: CountedItem[]; totalVotes: number } {
   const counts = new Map<string, number>();
   let totalVotes = 0;
@@ -195,6 +203,7 @@ function tallyIds(
       percent: percentOf(count, totalVotes),
     };
     if (option.correct !== undefined) item.correct = option.correct;
+    if (option.imageUrl !== undefined && option.imageUrl !== '') item.imageUrl = option.imageUrl;
     return item;
   });
 

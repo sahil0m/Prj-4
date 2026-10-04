@@ -41,10 +41,27 @@ export const zFiniteNumber = z
 export const zFiniteInRange = (min: number, max: number) =>
   zFiniteNumber.refine((n) => n >= min && n <= max, `Must be between ${min} and ${max}.`);
 
+/**
+ * A label on something being written.
+ *
+ * Empty is allowed, because a deck is edited one keystroke at a time: the
+ * moment someone adds a choice it has no text yet, and the moment they
+ * clear one to retype it, it has none again. Refusing to save those states
+ * meant every autosave failed with a 422 until the author happened to type
+ * something -- with nothing on screen to say why.
+ *
+ * What must not happen is presenting a half-written slide, and that is
+ * checked separately by readiness, which counts the labelled entries and
+ * refuses to start on a slide with fewer than two. Editing is forgiving;
+ * presenting is strict.
+ */
+export const zDraftLabel = z.string().trim().max(200);
+
 export const zOption = z.object({
   id: zLocalId,
-  label: z.string().trim().min(1).max(200),
-  imageUrl: zSafeUrl.optional(),
+  label: zDraftLabel,
+  // Empty while being written, or a real address -- never a half-typed one.
+  imageUrl: z.union([z.literal(''), zSafeUrl]).optional(),
   /** Quiz only: marks this option as a correct answer. */
   correct: z.boolean().optional(),
 });
@@ -52,13 +69,13 @@ export type Option = z.infer<typeof zOption>;
 
 export const zItem = z.object({
   id: zLocalId,
-  label: z.string().trim().min(1).max(200),
+  label: zDraftLabel,
 });
 export type Item = z.infer<typeof zItem>;
 
 export const zStatement = z.object({
   id: zLocalId,
-  label: z.string().trim().min(1).max(200),
+  label: zDraftLabel,
 });
 export type Statement = z.infer<typeof zStatement>;
 

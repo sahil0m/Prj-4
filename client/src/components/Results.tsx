@@ -94,6 +94,13 @@ function Bars({ items, total, reveal }: { items: CountedItem[]; total: number; r
           data-reveal={reveal ? (item.correct === true ? 'correct' : 'wrong') : undefined}
         >
           <div className={styles.barLabel}>
+            {/* The room chose between pictures, so the result has to show
+                them -- a chart of text alone leaves nobody able to tell
+                which bar was which. */}
+            {item.imageUrl !== undefined && item.imageUrl !== '' && (
+              <img className={styles.barImage} src={item.imageUrl} alt="" loading="lazy" />
+            )}
+
             <span className={styles.barKey}>{String.fromCharCode(65 + i)}</span>
             <span className={styles.barText}>{item.label}</span>
             {reveal && item.correct === true && (

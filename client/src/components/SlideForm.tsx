@@ -1,6 +1,12 @@
 import { useId } from 'react';
 import { Plus, Trash2, GripVertical, Check } from 'lucide-react';
-import { fieldsFor, definitionFor, type FieldSpec, type SlideKind } from '@pulse/shared';
+import {
+  fieldsFor,
+  definitionFor,
+  type ColumnSpec,
+  type FieldSpec,
+  type SlideKind,
+} from '@pulse/shared';
 import { Toggle, Range, Choice } from './Controls';
 import styles from './SlideForm.module.css';
 
@@ -119,7 +125,11 @@ function Field({
   const value = config[field.name];
 
   if (field.kind === 'options') {
-    return <OptionsEditor field={field} config={config} onChange={onChange} />;
+    return <ListEditor field={field} config={config} onChange={onChange} />;
+  }
+
+  if (field.kind === 'textList') {
+    return <TextListEditor field={field} config={config} onChange={onChange} />;
   }
 
   if (field.kind === 'boolean') {
@@ -296,22 +306,21 @@ function Field({
 }
 
 /* ------------------------------------------------------------------ */
-/* Options                                                             */
+/* Lists                                                               */
 /* ------------------------------------------------------------------ */
 
-interface Option {
-  id: string;
-  label: string;
-  correct?: boolean;
-  imageUrl?: string;
-}
+type Entry = Record<string, unknown> & { id: string };
 
 /**
- * The answer choices for a multiple-choice or quiz slide.
+ * A list of entries, with whatever each entry actually holds.
  *
- * Quiz kinds gain a correct-answer tick; everything else shows labels only.
+ * The columns come from the kind's own schema, so this one editor covers
+ * every list in the product: choices with a picture, a form's fields with
+ * their type, a quiz's left-and-right pairs. It used to edit a label and
+ * nothing else, which left Image Choice with no way to set an image and
+ * Quiz: Match with no editor at all.
  */
-function OptionsEditor({
+function ListEditor({
   field,
   config,
   onChange,
@@ -321,74 +330,80 @@ function OptionsEditor({
   onChange: (patch: Config) => void;
 }) {
   const raw = config[field.name];
-  const options: Option[] = Array.isArray(raw) ? (raw as Option[]) : [];
-  const isQuiz = options.some((o) => 'correct' in o);
+  const entries: Entry[] = Array.isArray(raw) ? (raw as Entry[]) : [];
+  const columns = field.columns ?? [];
 
-  const write = (next: Option[]) => {
+  // What the schema allows, rather than a guess: a bullet list may go down
+  // to one line, a ranking may not go below two.
+  const minItems = field.minItems ?? 0;
+  const maxItems = field.maxItems ?? 50;
+
+  const write = (next: Entry[]) => {
     onChange({ [field.name]: next });
   };
 
-  const setLabel = (index: number, label: string) => {
-    write(options.map((o, i) => (i === index ? { ...o, label } : o)));
+  const setValue = (index: number, name: string, value: unknown) => {
+    write(entries.map((entry, i) => (i === index ? { ...entry, [name]: value } : entry)));
   };
 
-  const markCorrect = (index: number) => {
-    write(options.map((o, i) => ({ ...o, correct: i === index })));
+  /** The right answer is one of the entries, so marking one clears the rest. */
+  const markCorrect = (index: number, name: string) => {
+    write(entries.map((entry, i) => ({ ...entry, [name]: i === index })));
   };
 
   const add = () => {
-    // Ids only need to be unique inside the slide.
-    const id = `o${String(Date.now()).slice(-6)}${String(options.length)}`;
-    write([...options, { id, label: '' }]);
-  };
+    const blank: Entry = { id: newEntryId(entries.length) };
 
-  const remove = (index: number) => {
-    write(options.filter((_, i) => i !== index));
+    for (const column of columns) {
+      if (column.kind === 'boolean' || column.kind === 'correct') blank[column.name] = false;
+      else if (column.kind === 'select') blank[column.name] = column.choices?.[0] ?? '';
+      else if (column.kind === 'textList') blank[column.name] = [];
+      else if (!column.optional) blank[column.name] = '';
+    }
+
+    write([...entries, blank]);
   };
 
   return (
     <div className={styles.field}>
       <span className={styles.label}>{field.label}</span>
+      {field.hint !== undefined && <p className={styles.hint}>{field.hint}</p>}
 
       <ul className={styles.options}>
-        {options.map((option, index) => (
-          <li key={option.id} className={styles.option}>
+        {entries.map((entry, index) => (
+          <li key={entry.id} className={styles.option} data-rows={columns.length > 2}>
             <GripVertical size={14} className={styles.optionGrip} aria-hidden="true" />
 
-            {isQuiz && (
-              <button
-                type="button"
-                className={styles.correctToggle}
-                data-correct={option.correct === true}
-                onClick={() => {
-                  markCorrect(index);
-                }}
-                aria-label={`Mark option ${String(index + 1)} correct`}
-                title="Mark as the correct answer"
-              >
-                <Check size={12} />
-              </button>
-            )}
-
-            <input
-              className={styles.optionInput}
-              value={option.label}
-              placeholder={`Option ${String(index + 1)}`}
-              onChange={(e) => {
-                setLabel(index, e.target.value);
-              }}
-            />
+            <div className={styles.optionFields}>
+              {columns.map((column) => (
+                <ListCell
+                  key={column.name}
+                  column={column}
+                  value={entry[column.name]}
+                  index={index}
+                  onChange={(value) => {
+                    setValue(index, column.name, value);
+                  }}
+                  onMarkCorrect={() => {
+                    markCorrect(index, column.name);
+                  }}
+                />
+              ))}
+            </div>
 
             <button
               type="button"
               className={styles.optionRemove}
               onClick={() => {
-                remove(index);
+                write(entries.filter((_, i) => i !== index));
               }}
-              // Most choice schemas require at least two options; removing
-              // below that would fail validation on save.
-              disabled={options.length <= 2}
-              aria-label={`Remove option ${String(index + 1)}`}
+              disabled={entries.length <= minItems}
+              title={
+                entries.length <= minItems
+                  ? `This slide needs at least ${String(minItems)}.`
+                  : undefined
+              }
+              aria-label={`Remove ${String(index + 1)}`}
             >
               <Trash2 size={14} />
             </button>
@@ -396,12 +411,211 @@ function OptionsEditor({
         ))}
       </ul>
 
-      <button type="button" className={styles.addOption} onClick={add}>
+      <button
+        type="button"
+        className={styles.addOption}
+        onClick={add}
+        disabled={entries.length >= maxItems}
+        title={entries.length >= maxItems ? `At most ${String(maxItems)}.` : undefined}
+      >
         <Plus size={15} />
-        Add option
+        Add
       </button>
     </div>
   );
+}
+
+/** One editable value inside a list entry. */
+function ListCell({
+  column,
+  value,
+  index,
+  onChange,
+  onMarkCorrect,
+}: {
+  column: ColumnSpec;
+  value: unknown;
+  index: number;
+  onChange: (value: unknown) => void;
+  onMarkCorrect: () => void;
+}) {
+  if (column.kind === 'correct') {
+    return (
+      <button
+        type="button"
+        className={styles.correctToggle}
+        data-correct={value === true}
+        onClick={onMarkCorrect}
+        aria-label={`Mark ${String(index + 1)} correct`}
+        title="Mark as the correct answer"
+      >
+        <Check size={12} />
+      </button>
+    );
+  }
+
+  if (column.kind === 'boolean') {
+    return (
+      <label className={styles.optionFlag}>
+        <input
+          type="checkbox"
+          checked={value === true}
+          onChange={(event) => {
+            onChange(event.target.checked);
+          }}
+        />
+        {column.label}
+      </label>
+    );
+  }
+
+  if (column.kind === 'select') {
+    return (
+      <select
+        className={styles.optionSelect}
+        value={typeof value === 'string' ? value : (column.choices?.[0] ?? '')}
+        aria-label={column.label}
+        onChange={(event) => {
+          onChange(event.target.value);
+        }}
+      >
+        {(column.choices ?? []).map((choice) => (
+          <option key={choice} value={choice}>
+            {humaniseChoice(choice)}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
+  if (column.kind === 'textList') {
+    // A list inside a row, edited as one line. Typing commas is quicker
+    // than a second nested editor, and these are short lists of choices.
+    const items = Array.isArray(value) ? (value as string[]) : [];
+
+    return (
+      <input
+        className={styles.optionInput}
+        value={items.join(', ')}
+        placeholder={`${column.label}, separated by commas`}
+        aria-label={column.label}
+        onChange={(event) => {
+          onChange(
+            event.target.value
+              .split(',')
+              .map((part) => part.trim())
+              .filter((part) => part !== ''),
+          );
+        }}
+      />
+    );
+  }
+
+  return (
+    <input
+      className={column.kind === 'url' ? styles.optionUrl : styles.optionInput}
+      type={column.kind === 'url' ? 'url' : 'text'}
+      value={typeof value === 'string' ? value : ''}
+      maxLength={column.max}
+      placeholder={column.kind === 'url' ? 'https://… (optional)' : column.label}
+      aria-label={column.label}
+      onChange={(event) => {
+        onChange(event.target.value);
+      }}
+    />
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Plain lists                                                         */
+/* ------------------------------------------------------------------ */
+
+/**
+ * A list of plain strings: the lines of a bullet slide, the spellings a
+ * typed quiz answer will accept, the colours a drawing offers.
+ */
+function TextListEditor({
+  field,
+  config,
+  onChange,
+}: {
+  field: FieldSpec;
+  config: Config;
+  onChange: (patch: Config) => void;
+}) {
+  const raw = config[field.name];
+  const items: string[] = Array.isArray(raw) ? (raw as string[]) : [];
+
+  const isColor = field.itemFormat === 'color';
+  const minItems = field.minItems ?? 0;
+  const maxItems = field.maxItems ?? 50;
+
+  const write = (next: string[]) => {
+    onChange({ [field.name]: next });
+  };
+
+  return (
+    <div className={styles.field}>
+      <span className={styles.label}>{field.label}</span>
+      {field.hint !== undefined && <p className={styles.hint}>{field.hint}</p>}
+
+      <ul className={styles.options}>
+        {items.map((item, index) => (
+          // Index as key: these are plain strings with nothing to identify
+          // them, and the list is only ever edited in place.
+          <li key={index} className={styles.option}>
+            <GripVertical size={14} className={styles.optionGrip} aria-hidden="true" />
+
+            <input
+              className={isColor ? styles.optionColor : styles.optionInput}
+              type={isColor ? 'color' : 'text'}
+              value={item || (isColor ? '#6366f1' : '')}
+              placeholder={`${field.label} ${String(index + 1)}`}
+              aria-label={`${field.label} ${String(index + 1)}`}
+              onChange={(event) => {
+                write(items.map((value, i) => (i === index ? event.target.value : value)));
+              }}
+            />
+
+            <button
+              type="button"
+              className={styles.optionRemove}
+              onClick={() => {
+                write(items.filter((_, i) => i !== index));
+              }}
+              disabled={items.length <= minItems}
+              title={
+                items.length <= minItems
+                  ? `This slide needs at least ${String(minItems)}.`
+                  : undefined
+              }
+              aria-label={`Remove ${String(index + 1)}`}
+            >
+              <Trash2 size={14} />
+            </button>
+          </li>
+        ))}
+      </ul>
+
+      <button
+        type="button"
+        className={styles.addOption}
+        onClick={() => {
+          write([...items, isColor ? '#6366f1' : '']);
+        }}
+        disabled={items.length >= maxItems}
+        title={items.length >= maxItems ? `At most ${String(maxItems)}.` : undefined}
+      >
+        <Plus size={15} />
+        Add
+      </button>
+    </div>
+  );
+}
+
+/** Ids only need to be unique inside one slide. */
+function newEntryId(position: number): string {
+  return `o${String(Date.now()).slice(-6)}${String(position)}`;
 }
 
 /** "bars" -> "Bars", "stacked_bars" -> "Stacked bars". */

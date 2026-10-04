@@ -784,3 +784,18 @@
     opacity: 1;
   }
 }
+
+/*
+ * The picture an option carried, beside its bar.
+ *
+ * Sized against the viewport like everything else on the stage, so it
+ * stays legible from the back of a room without crowding the label.
+ */
+.barImage {
+  flex: none;
+  width: clamp(34px, 3.4vw, 56px);
+  height: clamp(34px, 3.4vw, 56px);
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-ink) 8%, transparent);
+}

@@ -156,7 +156,7 @@ export const zQuizSelect = zQuizBase.extend({
 
 export const zQuizType = zQuizBase.extend({
   kind: z.literal('quiz_type'),
-  acceptedAnswers: z.array(z.string().trim().min(1).max(100)).min(1).max(20),
+  acceptedAnswers: z.array(z.string().trim().max(100)).max(20).default([]),
   caseSensitive: z.boolean().default(false),
   /** Allows small typos through, measured by edit distance. */
   fuzzyTolerance: z.number().int().min(0).max(3).default(1),
@@ -168,8 +168,9 @@ export const zQuizMatch = zQuizBase.extend({
     .array(
       z.object({
         id: zLocalId,
-        left: z.string().trim().min(1).max(120),
-        right: z.string().trim().min(1).max(120),
+        // Both sides may be empty while the author is still typing them.
+        left: z.string().trim().max(120),
+        right: z.string().trim().max(120),
       }),
     )
     .min(2)
@@ -201,7 +202,8 @@ export const zQa = zSlideBase.extend({
 
 export const zFormField = z.object({
   id: zLocalId,
-  label: z.string().trim().min(1).max(120),
+  // Empty while being written; readiness is what refuses to present it.
+  label: z.string().trim().max(120),
   type: z.enum(['text', 'email', 'number', 'select', 'checkbox']),
   required: z.boolean().default(false),
   options: z.array(z.string().trim().max(120)).max(20).optional(),

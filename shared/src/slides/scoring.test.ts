@@ -147,6 +147,67 @@ describe('scoreAnswer - quiz_select', () => {
 describe('scoreAnswer - quiz_type', () => {
   const config = { ...QUIZ, correctText: 'The Great Gatsby', acceptedAnswers: ['Gatsby'] };
 
+  /*
+   * Both of these were offered in the editor and ignored by the scoring:
+   * an author could ask for exact case, or forgive a typo, and neither
+   * changed whether an answer counted.
+   */
+  const typed = (text: string, extra: Record<string, unknown> = {}) =>
+    scoreAnswer({ kind: 'quiz_type', payload: { text }, elapsedMs: 0 }, { ...config, ...extra })
+      .correct;
+
+  describe('case sensitivity', () => {
+    it('accepts any case by default', () => {
+      expect(typed('the great gatsby')).toBe(true);
+    });
+
+    it('requires the authors own case when they ask for it', () => {
+      expect(typed('the great gatsby', { caseSensitive: true })).toBe(false);
+      expect(typed('The Great Gatsby', { caseSensitive: true })).toBe(true);
+    });
+  });
+
+  describe('typo tolerance', () => {
+    it('forgives a single typo when one is allowed', () => {
+      expect(typed('The Great Gatsy', { fuzzyTolerance: 1 })).toBe(true);
+    });
+
+    it('forgives nothing when the allowance is zero', () => {
+      expect(typed('The Great Gatsy', { fuzzyTolerance: 0 })).toBe(false);
+    });
+
+    it('does not forgive more mistakes than allowed', () => {
+      expect(typed('The Grat Gatsy', { fuzzyTolerance: 1 })).toBe(false);
+      expect(typed('The Grat Gatsy', { fuzzyTolerance: 2 })).toBe(true);
+    });
+
+    /*
+     * The guard that keeps tolerance honest: on a short answer one edit
+     * is a different word, not a slip. Without it, a quiz asking for a
+     * three-letter answer would accept most of the alphabet.
+     */
+    it('never turns a short wrong answer into a right one', () => {
+      const shortConfig = { ...QUIZ, correctText: 'cat', acceptedAnswers: [] };
+      const score = (text: string) =>
+        scoreAnswer(
+          { kind: 'quiz_type', payload: { text }, elapsedMs: 0 },
+          { ...shortConfig, fuzzyTolerance: 2 },
+        ).correct;
+
+      expect(score('cat')).toBe(true);
+      expect(score('cap')).toBe(false);
+      expect(score('dog')).toBe(false);
+    });
+
+    it('applies the same tolerance to an alternative spelling', () => {
+      // "Gatsy" and "Gatsbyy" are each one edit from the accepted "Gatsby".
+      expect(typed('Gatsy', { fuzzyTolerance: 1 })).toBe(true);
+      expect(typed('Gatsbyy', { fuzzyTolerance: 1 })).toBe(true);
+      // Two edits away, with only one forgiven.
+      expect(typed('Gtsyy', { fuzzyTolerance: 1 })).toBe(false);
+    });
+  });
+
   it('accepts an exact answer', () => {
     expect(
       scoreAnswer(

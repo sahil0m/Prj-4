@@ -435,3 +435,19 @@
   opacity: 0.4;
   background: color-mix(in srgb, var(--color-ink) 14%, transparent);
 }
+
+/*
+ * The picture on an Image Choice option.
+ *
+ * Sized so a tap target stays comfortable and a row of choices still fits
+ * on a small screen; cropped to fill rather than stretched, because an
+ * author's images will not share one aspect ratio.
+ */
+.optionImage {
+  flex: none;
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-ink) 8%, transparent);
+}

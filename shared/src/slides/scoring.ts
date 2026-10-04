@@ -68,17 +68,55 @@ function strings(value: unknown): string[] {
  * Someone who types "  The Great Gatsby " has answered correctly, and a quiz
  * that says otherwise feels broken rather than strict.
  */
-function normalise(text: string): string {
+function normalise(text: string, caseSensitive = false): string {
+  const trimmed = caseSensitive ? text.trim() : text.trim().toLowerCase();
+
   return (
-    text
-      .trim()
-      .toLowerCase()
+    trimmed
       .normalize('NFKD')
       // Strip accents, so "cafe" matches "café".
       .replace(/[̀-ͯ]/g, '')
       .replace(/[.,!?;:'"()]/g, '')
       .replace(/\s+/g, ' ')
   );
+}
+
+/**
+ * How many single-character edits turn one string into the other.
+ *
+ * Used to let a typed quiz answer through despite a typo, by the number of
+ * mistakes the author said they would forgive. Bounded early: once the
+ * strings differ in length by more than the allowance, no amount of edits
+ * will close the gap, and there is no point counting them.
+ */
+function editDistance(a: string, b: string, limit: number): number {
+  if (a === b) return 0;
+  if (Math.abs(a.length - b.length) > limit) return limit + 1;
+
+  // One row at a time rather than the whole matrix: these are short
+  // answers, and the previous row is all the next one needs.
+  let previous = Array.from({ length: b.length + 1 }, (_, i) => i);
+
+  for (let i = 1; i <= a.length; i += 1) {
+    const current = [i];
+    let best = i;
+
+    for (let j = 1; j <= b.length; j += 1) {
+      const substitution = (previous[j - 1] ?? 0) + (a[i - 1] === b[j - 1] ? 0 : 1);
+      const insertion = (current[j - 1] ?? 0) + 1;
+      const deletion = (previous[j] ?? 0) + 1;
+
+      const value = Math.min(substitution, insertion, deletion);
+      current[j] = value;
+      best = Math.min(best, value);
+    }
+
+    // Every way through this row already costs more than allowed.
+    if (best > limit) return limit + 1;
+    previous = current;
+  }
+
+  return previous[b.length] ?? limit + 1;
 }
 
 /**
@@ -172,16 +210,39 @@ function isCorrect(answer: ScorableAnswer, config: Record<string, unknown>): boo
     }
 
     case 'quiz_type': {
-      const typed = typeof payload.text === 'string' ? normalise(payload.text) : '';
+      /*
+       * Both of these were settings the editor offered and the scoring
+       * ignored: an author could ask for exact case, or forgive a typo,
+       * and neither made any difference to whether an answer counted.
+       */
+      const caseSensitive = config.caseSensitive === true;
+
+      const tolerance =
+        typeof config.fuzzyTolerance === 'number' && Number.isFinite(config.fuzzyTolerance)
+          ? Math.max(0, Math.min(3, Math.trunc(config.fuzzyTolerance)))
+          : 0;
+
+      const typed = typeof payload.text === 'string' ? normalise(payload.text, caseSensitive) : '';
       if (typed === '') return false;
 
       // Several spellings may be accepted; the author lists them.
       const accepted = [
         ...(typeof config.correctText === 'string' ? [config.correctText] : []),
         ...strings(config.acceptedAnswers),
-      ].map(normalise);
+      ].map((answer) => normalise(answer, caseSensitive));
 
-      return accepted.includes(typed);
+      if (accepted.includes(typed)) return true;
+      if (tolerance === 0) return false;
+
+      /*
+       * A typo is forgiven, a different short word is not. Without the
+       * length guard, one edit turns "cat" into "cap" and a tolerance
+       * meant for long words would accept the wrong answer outright.
+       */
+      return accepted.some((answer) => {
+        if (answer.length <= tolerance + 2) return false;
+        return editDistance(typed, answer, tolerance) <= tolerance;
+      });
     }
 
     case 'quiz_order': {
