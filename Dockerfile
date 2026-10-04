@@ -22,6 +22,10 @@ COPY join/package.json join/
 # resolve the workspace tree.
 RUN npm ci --workspace @pulse/shared --workspace @pulse/server --include-workspace-root
 
+# Both workspaces extend this, so without it tsc silently falls back to
+# its own defaults and fails on every modern iterator in the codebase.
+COPY tsconfig.base.json ./
+
 COPY shared/ shared/
 COPY server/ server/
 

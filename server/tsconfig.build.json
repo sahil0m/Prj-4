@@ -1,0 +1,17 @@
+{
+  // What actually ships.
+  //
+  // tsconfig.json includes the scripts under src/scripts so the editor
+  // and ESLint type-check them alongside the code they exercise. They
+  // are development tools: the verification suites and the load test
+  // drive the server from outside, and import socket.io-client and
+  // other dev dependencies that a production install does not have.
+  //
+  // Compiling them into dist would therefore fail the production build,
+  // and succeed only by shipping test tooling into the image.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./tsconfig.build.tsbuildinfo"
+  },
+  "exclude": ["src/**/*.test.ts", "src/scripts/**/*"]
+}
