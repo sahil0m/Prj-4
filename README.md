@@ -24,14 +24,14 @@ shows whichever slide the presenter is on and changes by itself when they move o
 
 ### The 34 slide types
 
-| Group | Types |
-| --- | --- |
-| Free response | word cloud, open text, question and answer, drawing |
-| Choice | multiple choice, image choice, true or false, who will win, quick form |
-| Scales and ordering | scales, ranking, star rating, net promoter score, guess the number, compare |
-| Scored quiz | select an answer, type an answer, match pairs, put in order, leaderboard |
-| Spatial | pin on an image, pin on a map |
-| Content | heading, paragraph, bullets, big number, quote, image, video, instructions, section break, embed, text, choice, rating |
+| Group               | Types                                                                                                                  |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Free response       | word cloud, open text, question and answer, drawing                                                                    |
+| Choice              | multiple choice, image choice, true or false, who will win, quick form                                                 |
+| Scales and ordering | scales, ranking, star rating, net promoter score, guess the number, compare                                            |
+| Scored quiz         | select an answer, type an answer, match pairs, put in order, leaderboard                                               |
+| Spatial             | pin on an image, pin on a map                                                                                          |
+| Content             | heading, paragraph, bullets, big number, quote, image, video, instructions, section break, embed, text, choice, rating |
 
 ---
 
@@ -40,13 +40,13 @@ shows whichever slide the presenter is on and changes by itself when they move o
 Measured with simulated phones against one laptop, all on the same machine. The budget is
 what each measurement has to stay under for the room to feel live.
 
-| | 800 phones | 1,500 phones | Budget |
-| --- | --- | --- | --- |
-| Everyone joins at once (95th percentile) | 392 ms | 669 ms | 3,000 ms |
-| Everyone answers at once (95th percentile) | 590 ms | 907 ms | 3,000 ms |
-| Everyone answers a quiz (95th percentile) | 645 ms | 1,729 ms | 4,000 ms |
-| Moving to the next slide (95th percentile) | 55 ms | 81 ms | 2,000 ms |
-| Answers stored per second | 1,266 | 1,533 | |
+|                                            | 800 phones | 1,500 phones | Budget   |
+| ------------------------------------------ | ---------- | ------------ | -------- |
+| Everyone joins at once (95th percentile)   | 392 ms     | 669 ms       | 3,000 ms |
+| Everyone answers at once (95th percentile) | 590 ms     | 907 ms       | 3,000 ms |
+| Everyone answers a quiz (95th percentile)  | 645 ms     | 1,729 ms     | 4,000 ms |
+| Moving to the next slide (95th percentile) | 55 ms      | 81 ms        | 2,000 ms |
+| Answers stored per second                  | 1,266      | 1,533        |          |
 
 Nothing was refused at either size. Run it yourself:
 
@@ -84,11 +84,11 @@ Then start everything:
 npm run dev
 ```
 
-| | |
-| --- | --- |
+|           |                       |
+| --------- | --------------------- |
 | Presenter | http://localhost:5173 |
-| Audience | http://localhost:5174 |
-| API | http://localhost:4000 |
+| Audience  | http://localhost:5174 |
+| API       | http://localhost:4000 |
 
 Database tables are created automatically on first start. Nothing else to set up.
 
@@ -102,15 +102,15 @@ addresses, it offers a list so you can pick the one the room can actually reach.
 
 ## Built with
 
-| | |
-| --- | --- |
-| Server | Node.js 20, Express 5, Socket.IO |
-| Database | PostgreSQL 17 with Drizzle ORM |
-| Presenter | React 19, Vite |
-| Audience | Preact, for a much smaller download on a phone |
-| Validation | Zod, shared between server and both clients |
-| Passwords | Argon2id |
-| Images | sharp, re-encoding uploads to WebP |
+|            |                                                |
+| ---------- | ---------------------------------------------- |
+| Server     | Node.js 20, Express 5, Socket.IO               |
+| Database   | PostgreSQL 17 with Drizzle ORM                 |
+| Presenter  | React 19, Vite                                 |
+| Audience   | Preact, for a much smaller download on a phone |
+| Validation | Zod, shared between server and both clients    |
+| Passwords  | Argon2id                                       |
+| Images     | sharp, re-encoding uploads to WebP             |
 
 Four npm workspaces — `shared`, `server`, `client`, `join` — written in TypeScript under
 `strict` with `noUncheckedIndexedAccess`. Every slide type is declared once in `shared`
@@ -141,6 +141,17 @@ npm run verify
 ```
 
 ---
+
+## Putting it online
+
+Pulse is meant to run on a laptop in the room, which needs none of this. To
+host it instead, see [DEPLOYING.md](DEPLOYING.md): the two front ends go to
+Vercel, the server to Fly.io, PostgreSQL to Neon and images to Cloudflare R2.
+All free, nothing expires.
+
+The server cannot run on Vercel. It holds a WebSocket open for every phone
+for the length of the lecture, which a platform that discards the process
+after each request cannot do.
 
 ## Optional extras
 

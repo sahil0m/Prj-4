@@ -1,0 +1,17 @@
+# Everything the image does not need. Keeping this small makes the build
+# faster and keeps local secrets out of the build context entirely.
+node_modules
+**/node_modules
+**/dist
+.git
+.env
+.env.*
+!.env.example
+report/
+*.docx
+*.pdf
+*.log
+.vscode
+.idea
+coverage
+**/*.tsbuildinfo

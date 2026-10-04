@@ -6,6 +6,7 @@ import { db } from '../lib/db.js';
 import { newId, isId } from '../db/ids.js';
 import { images } from '../db/schema.js';
 import { requireAuth, type AuthedRequest } from '../middleware/requireAuth.js';
+import { putImage, getImage } from '../lib/storage.js';
 import { HttpError } from '../app.js';
 import { logger } from '../lib/logger.js';
 
@@ -70,7 +71,13 @@ export function imageRoutes(): Router {
         }
 
         const [image] = await db
-          .select({ mime: images.mime, data: images.data, thumb: images.thumb })
+          .select({
+            mime: images.mime,
+            data: images.data,
+            thumb: images.thumb,
+            dataKey: images.dataKey,
+            thumbKey: images.thumbKey,
+          })
           .from(images)
           .where(eq(images.id, req.params.imageId));
 
@@ -80,7 +87,21 @@ export function imageRoutes(): Router {
 
         // ?size=thumb for the places an image is shown small, so a phone
         // showing four choices downloads kilobytes rather than megabytes.
-        const bytes = req.query.size === 'thumb' ? image.thumb : image.data;
+        const small = req.query.size === 'thumb';
+
+        /*
+         * The bytes are in one place or the other, never both. A row
+         * written while the server used the database is still served
+         * from it after object storage is switched on, which is what
+         * makes that switch safe to make on a running installation.
+         */
+        const inline = small ? image.thumb : image.data;
+        const key = small ? image.thumbKey : image.dataKey;
+        const bytes = inline ?? (key === null ? null : await getImage(key));
+
+        if (!bytes) {
+          throw new HttpError(404, 'That image was not found.', 'image_not_found');
+        }
 
         res.setHeader('Content-Type', image.mime);
         // The bytes at an id never change, so a phone fetches each image
@@ -156,6 +177,11 @@ export function imageRoutes(): Router {
         const id = newId();
         const ownerId = (req as AuthedRequest).user.id;
 
+        // Returns the bytes to store inline, or the key they were
+        // written under, depending on how the server is configured.
+        const full = await putImage(id, 'full', processed.data, 'image/webp');
+        const thumb = await putImage(id, 'thumb', thumbnail, 'image/webp');
+
         await db.insert(images).values({
           id,
           ownerId,
@@ -163,8 +189,10 @@ export function imageRoutes(): Router {
           width: processed.info.width,
           height: processed.info.height,
           bytes: processed.data.length,
-          data: processed.data,
-          thumb: thumbnail,
+          data: full.data,
+          dataKey: full.key,
+          thumb: thumb.data,
+          thumbKey: thumb.key,
           thumbBytes: thumbnail.length,
         });
 

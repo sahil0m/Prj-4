@@ -18,15 +18,33 @@ const OAUTH_STATE_COOKIE = 'pulse_oauth_state';
 const OAUTH_VERIFIER_COOKIE = 'pulse_oauth_verifier';
 
 /**
+ * How strictly the browser withholds our cookies on cross-site requests.
+ *
+ * `lax` is the right answer and the default: it allows the OAuth redirect
+ * back from Google while blocking cross-site form posts.
+ *
+ * A split deployment cannot use it. When the presenter page is served
+ * from one domain and this server runs on another, every API call is
+ * cross-site by definition, and `lax` means the browser never sends the
+ * refresh cookie -- the presenter is signed out the moment their access
+ * token expires. `none` is required there, and the browser only honours
+ * it over HTTPS, which is why it is refused without `secure`.
+ *
+ * Set CROSS_SITE_COOKIES=true only when the clients really are on
+ * another domain. On one domain, leaving it unset is both safer and
+ * correct.
+ */
+const sameSite = env.CROSS_SITE_COOKIES ? ('none' as const) : ('lax' as const);
+
+/**
  * The refresh token lives in an httpOnly cookie so that JavaScript — ours or
- * an attacker's — cannot read it. `sameSite: lax` still allows the OAuth
- * redirect back from Google while blocking cross-site form posts.
+ * an attacker's — cannot read it.
  */
 function refreshCookieOptions(): CookieOptions {
   return {
     httpOnly: true,
-    secure: isProduction,
-    sameSite: 'lax',
+    secure: isProduction || env.CROSS_SITE_COOKIES,
+    sameSite,
     path: '/api/auth',
     maxAge: REFRESH_TOKEN_TTL_MS,
     ...(env.COOKIE_DOMAIN ? { domain: env.COOKIE_DOMAIN } : {}),
@@ -37,8 +55,8 @@ function refreshCookieOptions(): CookieOptions {
 function oauthCookieOptions(): CookieOptions {
   return {
     httpOnly: true,
-    secure: isProduction,
-    sameSite: 'lax',
+    secure: isProduction || env.CROSS_SITE_COOKIES,
+    sameSite,
     path: '/api/auth',
     maxAge: 10 * 60 * 1000,
     ...(env.COOKIE_DOMAIN ? { domain: env.COOKIE_DOMAIN } : {}),

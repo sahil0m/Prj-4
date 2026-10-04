@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { SERVER_ORIGIN } from './lib/origin';
 import type { SessionState, ParticipantSlide } from '@pulse/shared';
 // Imported from the theme entry point rather than the package root: the
 // root pulls in the slide registry and every schema with it, which is
@@ -336,7 +337,7 @@ function CodeScreen({
     let cancelled = false;
     setChecking(true);
 
-    void fetch(`/api/sessions/lookup?code=${code}`)
+    void fetch(`${SERVER_ORIGIN}/api/sessions/lookup?code=${code}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((data: { title?: string } | null) => {
         if (cancelled) return;

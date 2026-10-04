@@ -1,4 +1,5 @@
 import type { SlideKind, SlideConfig, SlideResults } from '@pulse/shared';
+import { SERVER_ORIGIN } from './origin';
 
 /**
  * The API client.
@@ -64,7 +65,7 @@ export function getAccessToken(): string | null {
 /* Core request                                                        */
 /* ------------------------------------------------------------------ */
 
-const BASE = '/api';
+const BASE = `${SERVER_ORIGIN}/api`;
 
 interface RequestOptions {
   method?: string;
@@ -409,7 +410,7 @@ export const api = {
     const body = new FormData();
     body.append('file', file);
 
-    const response = await fetch('/api/ai/read-document', {
+    const response = await fetch(`${BASE}/ai/read-document`, {
       method: 'POST',
       credentials: 'include',
       headers: getAccessToken() ? { Authorization: `Bearer ${getAccessToken() ?? ''}` } : {},

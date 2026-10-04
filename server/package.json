@@ -24,6 +24,7 @@
     "where": "tsx src/scripts/where.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1146.0",
     "@pulse/shared": "*",
     "@types/cookie-parser": "^1.4.10",
     "argon2": "^0.41.1",

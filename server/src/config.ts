@@ -54,6 +54,36 @@ const zEnv = z.object({
   GOOGLE_CLIENT_SECRET: z.string().optional(),
 
   /**
+   * Whether the browser must send our cookies on cross-site requests.
+   *
+   * Needed only when the clients are served from a different domain to
+   * this server, which is the case for a split hosted deployment and
+   * never the case when running locally. See the comment in the auth
+   * routes for why it cannot simply be on all the time.
+   */
+  CROSS_SITE_COOKIES: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
+
+  /**
+   * Object storage for uploaded images. Optional.
+   *
+   * Unset, image bytes are kept in PostgreSQL, which needs nothing
+   * configured and is right for a laptop in a lecture room. Set, the
+   * bytes go to an S3-compatible bucket instead, which is what a hosted
+   * deployment wants: the free database tiers are small, and a few
+   * hundred slide photographs would fill one.
+   *
+   * All four are needed together; any missing one leaves the database in
+   * use rather than half-configuring the bucket.
+   */
+  R2_ACCOUNT_ID: z.string().optional(),
+  R2_BUCKET: z.string().optional(),
+  R2_ACCESS_KEY_ID: z.string().optional(),
+  R2_SECRET_ACCESS_KEY: z.string().optional(),
+
+  /**
    * AI providers. All free tiers; the server never calls a paid endpoint.
    *
    * Every one is optional. With none set, the AI features report themselves

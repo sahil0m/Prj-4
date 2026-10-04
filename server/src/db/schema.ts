@@ -322,7 +322,15 @@ export const images = pgTable(
     width: integer('width').notNull(),
     height: integer('height').notNull(),
     bytes: integer('bytes').notNull(),
-    data: bytea('data').notNull(),
+
+    /*
+     * The bytes, when they are kept here. Null when they are in object
+     * storage, in which case `dataKey` says where. Exactly one of the
+     * two is set; which one depends on how the server is configured,
+     * and nothing outside the image route needs to know.
+     */
+    data: bytea('data'),
+    dataKey: varchar('data_key', { length: 200 }),
 
     /**
      * A small copy, for where the image is shown small.
@@ -331,7 +339,8 @@ export const images = pgTable(
      * full size is megabytes to render thumbnails. Stored once at upload
      * rather than resized on every request.
      */
-    thumb: bytea('thumb').notNull(),
+    thumb: bytea('thumb'),
+    thumbKey: varchar('thumb_key', { length: 200 }),
     thumbBytes: integer('thumb_bytes').notNull(),
 
     createdAt: createdAt(),

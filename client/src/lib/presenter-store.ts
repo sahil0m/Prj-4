@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { SOCKET_URL } from './origin';
 import { io, type Socket } from 'socket.io-client';
 import type {
   DeckThemeLike,
@@ -118,7 +119,10 @@ export const usePresenter = create<PresenterStore>((set, get) => ({
 
     // The access token goes through `auth`, not a query string, so it stays
     // out of server logs and proxy records.
-    socket = io({ transports: ['websocket', 'polling'], auth: { token: getAccessToken() } });
+    socket = io(SOCKET_URL, {
+      transports: ['websocket', 'polling'],
+      auth: { token: getAccessToken() },
+    });
 
     socket.on('connect', () => {
       set({ connected: true });

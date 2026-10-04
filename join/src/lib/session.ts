@@ -1,4 +1,5 @@
 import { io, type Socket } from 'socket.io-client';
+import { SOCKET_URL } from './origin';
 import type {
   ServerEvents,
   ClientEvents,
@@ -143,7 +144,7 @@ export class SessionConnection {
     this.joinCode = joinCode;
     this.displayName = displayName;
 
-    const socket: Socket<ServerEvents, ClientEvents> = io({
+    const socket: Socket<ServerEvents, ClientEvents> = io(SOCKET_URL, {
       transports: ['websocket', 'polling'],
       // Socket.IO's own backoff, capped so a phone that wakes in a pocket
       // does not sit for a minute before trying again.
