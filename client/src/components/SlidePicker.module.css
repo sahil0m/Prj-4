@@ -266,3 +266,53 @@
     grid-template-columns: 1fr;
   }
 }
+
+/*
+ * The card and its information button.
+ *
+ * The button is a sibling rather than a child: a button inside a button
+ * is invalid markup, and a click on it would add the slide rather than
+ * explain it. The wrapper exists only to position one over the other.
+ */
+.cardWrap {
+  position: relative;
+  display: flex;
+}
+
+.cardWrap > .card {
+  flex: 1;
+  /* Room for the button, so a long label never runs under it. */
+  padding-right: 34px;
+}
+
+.info {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  /* Quiet until wanted: the card's own text is what should be read first. */
+  color: color-mix(in srgb, var(--color-ink) 38%, transparent);
+  cursor: help;
+  transition:
+    color var(--duration-fast) var(--ease-standard),
+    background var(--duration-fast) var(--ease-standard);
+}
+
+.info:hover,
+.info:focus-visible {
+  color: var(--color-ink);
+  background: color-mix(in srgb, var(--color-ink) 8%, transparent);
+}
+
+/* On a touch screen there is no hover, so it stays legible. */
+@media (hover: none) {
+  .info {
+    color: color-mix(in srgb, var(--color-ink) 55%, transparent);
+  }
+}

@@ -24,6 +24,15 @@ export interface SlideDefinition<K extends SlideKind = SlideKind> {
   label: string;
   /** One line describing what the audience does. */
   blurb: string;
+  /**
+   * The fuller explanation, behind the information button in the picker.
+   *
+   * Written for someone deciding whether this is the slide they want: what
+   * they set up, what the audience does on their phone, and what appears
+   * on the projector. The blurb has to fit on a card, so it cannot answer
+   * any of those properly.
+   */
+  details: string;
   family: SlideFamily;
   /** Lucide icon name used across the editor and menus. */
   icon: string;
@@ -62,6 +71,8 @@ export const SLIDE_REGISTRY: { [K in SlideKind]: SlideDefinition<K> } = {
     kind: 'word_cloud',
     label: 'Word Cloud',
     blurb: 'People type short words. Popular words grow bigger.',
+    details:
+      'You write a prompt. Each person types one or more short words on their phone and sends them. The words appear on the projector as they arrive, and a word several people send grows larger than the rest. Good for opening a lecture, since one word is the least a room can be asked for.',
     family: 'text',
     icon: 'Cloud',
     answerable: true,
@@ -82,6 +93,8 @@ export const SLIDE_REGISTRY: { [K in SlideKind]: SlideDefinition<K> } = {
     kind: 'open_text',
     label: 'Open Text',
     blurb: 'People write a sentence. Answers group by meaning.',
+    details:
+      'You ask a question that needs a sentence rather than a word. Answers appear on the projector as cards, grouped where several people have said much the same thing, so a hundred responses stay readable. Nothing is scored; it is for hearing the room.',
     family: 'text',
     icon: 'MessageSquareText',
     answerable: true,
@@ -105,6 +118,8 @@ export const SLIDE_REGISTRY: { [K in SlideKind]: SlideDefinition<K> } = {
     kind: 'multiple_choice',
     label: 'Multiple Choice',
     blurb: 'Tap one option, or several. Shown as bars or a donut.',
+    details:
+      'You write a question and the options. Each person taps one, or several if you allow it. The projector shows the counts filling in live, as bars or a donut, and you can hide them until everyone has answered so the first votes do not sway the rest.',
     family: 'choice',
     icon: 'ListChecks',
     answerable: true,
@@ -132,6 +147,8 @@ export const SLIDE_REGISTRY: { [K in SlideKind]: SlideDefinition<K> } = {
     kind: 'image_choice',
     label: 'Image Choice',
     blurb: 'The options are pictures instead of words.',
+    details:
+      'The same as Multiple Choice, but each option is a picture you upload rather than a line of text. The audience taps the image on their phone, and the projector shows the pictures with their share of the vote. Use it when the options are visual: designs, charts, photographs.',
     family: 'choice',
     icon: 'Images',
     answerable: true,
@@ -152,6 +169,8 @@ export const SLIDE_REGISTRY: { [K in SlideKind]: SlideDefinition<K> } = {
     kind: 'true_false',
     label: 'True or False',
     blurb: 'A fast two-option question.',
+    details:
+      'One statement, two buttons. The fastest question to ask and to answer, so it suits checking a single point mid-lecture. The projector shows the split between the two sides as the answers arrive.',
     family: 'choice',
     icon: 'ToggleLeft',
     answerable: true,
@@ -172,6 +191,8 @@ export const SLIDE_REGISTRY: { [K in SlideKind]: SlideDefinition<K> } = {
     kind: 'who_will_win',
     label: 'Who Will Win',
     blurb: 'A multiple choice styled as a race, with a winner.',
+    details:
+      'A multiple choice drawn as a race. The options run across the projector and the leader pulls ahead as votes arrive, with a winner at the end. The audience simply picks an option; the difference is entirely in how the room watches the result.',
     family: 'choice',
     icon: 'Trophy',
     answerable: true,
@@ -195,6 +216,8 @@ export const SLIDE_REGISTRY: { [K in SlideKind]: SlideDefinition<K> } = {
     kind: 'scales',
     label: 'Scales',
     blurb: 'Rate several statements on a scale.',
+    details:
+      'You list several statements and set the range, such as one to five or disagree to agree. Each person rates every statement on their phone. The projector shows the average for each, so the statements can be compared against one another rather than read one at a time.',
     family: 'rating',
     icon: 'SlidersHorizontal',
     answerable: true,
@@ -222,6 +245,8 @@ export const SLIDE_REGISTRY: { [K in SlideKind]: SlideDefinition<K> } = {
     kind: 'ranking',
     label: 'Ranking',
     blurb: 'Drag items into order. One ranking for the room.',
+    details:
+      'You list the items. Each person drags them into their own order on their phone, and the projector shows one combined ranking for the room with the points each item collected. Use it when the question is what matters most, not what is popular.',
     family: 'rating',
     icon: 'ArrowUpDown',
     answerable: true,
@@ -244,6 +269,8 @@ export const SLIDE_REGISTRY: { [K in SlideKind]: SlideDefinition<K> } = {
     kind: 'points_100',
     label: '100 Points',
     blurb: 'Share 100 points between items. Forces real choices.',
+    details:
+      'You list the items and each person has a hundred points to divide between them. Spending on one means not spending on another, which is what makes this different from rating everything highly. The projector shows the totals the room allocated.',
     family: 'rating',
     icon: 'Coins',
     answerable: true,
@@ -267,6 +294,8 @@ export const SLIDE_REGISTRY: { [K in SlideKind]: SlideDefinition<K> } = {
     kind: 'grid_2x2',
     label: '2 by 2 Grid',
     blurb: 'Place items on a square with two axes.',
+    details:
+      'You name the two axes, such as effort against value. Each person places the items on a square on their phone. The projector shows every placement as a dot, so the clusters and the outliers are visible at once.',
     family: 'rating',
     icon: 'Grid2x2',
     answerable: true,
@@ -293,6 +322,8 @@ export const SLIDE_REGISTRY: { [K in SlideKind]: SlideDefinition<K> } = {
     kind: 'pin_image',
     label: 'Pin on Image',
     blurb: 'Tap anywhere on a picture to drop a pin.',
+    details:
+      'You upload a picture. Each person taps a point on it, and the pin appears on the projector over the same picture. Use it for anything positional: a spot on a diagram, a step in a flow, a place on a floor plan.',
     family: 'rating',
     icon: 'MapPin',
     answerable: true,
@@ -313,6 +344,8 @@ export const SLIDE_REGISTRY: { [K in SlideKind]: SlideDefinition<K> } = {
     kind: 'guess_number',
     label: 'Guess the Number',
     blurb: 'Type a number. Shows spread and average.',
+    details:
+      'You ask for a number. Each person types one on their phone, and the projector shows the spread of guesses with the average and, if you set one, how close the room came to the true answer. Good for estimates before revealing a figure.',
     family: 'rating',
     icon: 'Hash',
     answerable: true,
@@ -333,6 +366,8 @@ export const SLIDE_REGISTRY: { [K in SlideKind]: SlideDefinition<K> } = {
     kind: 'star_rating',
     label: 'Star Rating',
     blurb: 'A simple one-to-five style rating.',
+    details:
+      'A single thing rated out of five. The audience taps the stars; the projector shows the average and how many people have rated so far. The simplest way to ask how something went.',
     family: 'rating',
     icon: 'Star',
     answerable: true,
@@ -351,6 +386,8 @@ export const SLIDE_REGISTRY: { [K in SlideKind]: SlideDefinition<K> } = {
     kind: 'nps',
     label: 'Net Promoter Score',
     blurb: 'The standard zero-to-ten recommendation question.',
+    details:
+      'The standard zero-to-ten question about whether someone would recommend something. The projector shows the score calculated the usual way, with promoters, passives and detractors separated, so the figure means the same as it does elsewhere.',
     family: 'rating',
     icon: 'Gauge',
     answerable: true,
@@ -372,6 +409,8 @@ export const SLIDE_REGISTRY: { [K in SlideKind]: SlideDefinition<K> } = {
     kind: 'quiz_select',
     label: 'Quiz: Select Answer',
     blurb: 'Multiple choice with a correct answer and a countdown.',
+    details:
+      'A multiple choice with a correct answer and a countdown. You mark which option is right and how long the room has. Answering sooner scores more, so the points reward both knowing and deciding. Each phone is told privately whether it was right; the projector shows the distribution and then the answer.',
     family: 'quiz',
     icon: 'CircleCheck',
     answerable: true,
@@ -394,6 +433,8 @@ export const SLIDE_REGISTRY: { [K in SlideKind]: SlideDefinition<K> } = {
     kind: 'quiz_type',
     label: 'Quiz: Type Answer',
     blurb: 'People type the answer. Checked against your list.',
+    details:
+      'The audience types the answer rather than picking one. You list the spellings that count, and can allow small misspellings and ignore capitals, so a right answer typed quickly on a phone is not marked wrong. Scoring and the countdown work as they do for the other quiz slides.',
     family: 'quiz',
     icon: 'Keyboard',
     answerable: true,
@@ -414,6 +455,8 @@ export const SLIDE_REGISTRY: { [K in SlideKind]: SlideDefinition<K> } = {
     kind: 'quiz_match',
     label: 'Quiz: Match Pairs',
     blurb: 'Join items on the left to items on the right.',
+    details:
+      'You write pairs: a term and its definition, a country and its capital. The audience joins the left column to the right on their phone. Partly correct answers score partly, so a person who matched three of four is not treated as having failed.',
     family: 'quiz',
     icon: 'Link2',
     answerable: true,
@@ -435,6 +478,8 @@ export const SLIDE_REGISTRY: { [K in SlideKind]: SlideDefinition<K> } = {
     kind: 'quiz_order',
     label: 'Quiz: Order the Steps',
     blurb: 'Put a process into the correct order.',
+    details:
+      'You write the steps in their correct order and the audience is shown them shuffled, to drag back into place. Scoring credits how close the submitted order is, not only an exact match. Use it for processes, chronologies and anything sequential.',
     family: 'quiz',
     icon: 'ListOrdered',
     answerable: true,
@@ -457,6 +502,8 @@ export const SLIDE_REGISTRY: { [K in SlideKind]: SlideDefinition<K> } = {
     kind: 'leaderboard',
     label: 'Leaderboard',
     blurb: 'Top scorers so far. Faster correct answers score more.',
+    details:
+      'Shows the standings so far, so it belongs between quiz questions rather than at the end alone. Nobody answers it. Scores come from every quiz slide already played, with faster correct answers worth more, and each phone also sees its own position privately.',
     family: 'quiz',
     icon: 'Medal',
     answerable: false,
@@ -478,6 +525,8 @@ export const SLIDE_REGISTRY: { [K in SlideKind]: SlideDefinition<K> } = {
     kind: 'qa',
     label: 'Questions & Answers',
     blurb: 'People send questions any time and vote them up.',
+    details:
+      'A channel for the room to ask you things. People send questions from their phone at any point in the session, not only while this slide is up, and vote up questions already asked. The projector lists them with the most-voted first, and you mark one as answered once you have dealt with it.',
     family: 'audience',
     icon: 'MessagesSquare',
     answerable: false,
@@ -498,6 +547,8 @@ export const SLIDE_REGISTRY: { [K in SlideKind]: SlideDefinition<K> } = {
     kind: 'quick_form',
     label: 'Quick Form',
     blurb: 'Collect a name, an email, or any field you define.',
+    details:
+      'Several fields on one slide: a name, an email address, a number, a dropdown, a checkbox. You define the fields and which are required. Use it for sign-ups and registrations, where the usual one-question-per-slide shape would be tedious. The responses download as a spreadsheet.',
     family: 'audience',
     icon: 'ClipboardList',
     answerable: true,
@@ -519,6 +570,8 @@ export const SLIDE_REGISTRY: { [K in SlideKind]: SlideDefinition<K> } = {
     kind: 'drawing',
     label: 'Drawing',
     blurb: 'People sketch an answer on their phone.',
+    details:
+      'Each person draws on their phone with a finger and sends the sketch. The projector shows the drawings as they arrive. Useful where words are the slow way to answer: a shape, a graph, a diagram.',
     family: 'creative',
     icon: 'Pencil',
     answerable: true,
@@ -538,6 +591,8 @@ export const SLIDE_REGISTRY: { [K in SlideKind]: SlideDefinition<K> } = {
     kind: 'map_pin',
     label: 'Map Pin',
     blurb: 'Drop a pin on a real map.',
+    details:
+      'A real map. Each person drops a pin on a place, and the projector shows every pin on the same map. Use it for where people are from, where they have worked, or any question whose answer is a location.',
     family: 'creative',
     icon: 'Globe',
     answerable: true,
@@ -561,6 +616,8 @@ export const SLIDE_REGISTRY: { [K in SlideKind]: SlideDefinition<K> } = {
     kind: 'heading',
     label: 'Heading',
     blurb: 'A large title slide.',
+    details:
+      'A title, large and centred, with an optional line beneath it. Nobody answers it. Use it to open the session or to mark where a new topic begins.',
     family: 'content',
     icon: 'Heading1',
     answerable: false,
@@ -574,6 +631,8 @@ export const SLIDE_REGISTRY: { [K in SlideKind]: SlideDefinition<K> } = {
     kind: 'paragraph',
     label: 'Paragraph',
     blurb: 'A block of text.',
+    details:
+      'A block of text on the projector, for context the room should read rather than answer. Nobody answers it.',
     family: 'content',
     icon: 'Text',
     answerable: false,
@@ -587,6 +646,8 @@ export const SLIDE_REGISTRY: { [K in SlideKind]: SlideDefinition<K> } = {
     kind: 'bullets',
     label: 'Bullet List',
     blurb: 'A list, optionally revealed one line at a time.',
+    details:
+      'A list of points, which you can reveal one line at a time with the arrow keys so the room reads with you rather than ahead of you. Nobody answers it.',
     family: 'content',
     icon: 'List',
     answerable: false,
@@ -607,6 +668,8 @@ export const SLIDE_REGISTRY: { [K in SlideKind]: SlideDefinition<K> } = {
     kind: 'big_number',
     label: 'Big Number',
     blurb: 'One statistic, very large.',
+    details:
+      'One figure, as large as the slide allows, with a line of explanation under it. For the statistic a talk turns on, where a chart would bury it.',
     family: 'content',
     icon: 'TrendingUp',
     answerable: false,
@@ -620,6 +683,7 @@ export const SLIDE_REGISTRY: { [K in SlideKind]: SlideDefinition<K> } = {
     kind: 'quote',
     label: 'Quote',
     blurb: 'A pull quote with attribution.',
+    details: 'A pull quote with its attribution, set larger than body text. Nobody answers it.',
     family: 'content',
     icon: 'Quote',
     answerable: false,
@@ -633,6 +697,8 @@ export const SLIDE_REGISTRY: { [K in SlideKind]: SlideDefinition<K> } = {
     kind: 'image',
     label: 'Image',
     blurb: 'A full-slide picture or GIF.',
+    details:
+      'A picture filling the slide, uploaded from your machine or linked from the web. Animated GIFs play. Nobody answers it.',
     family: 'content',
     icon: 'Image',
     answerable: false,
@@ -646,6 +712,8 @@ export const SLIDE_REGISTRY: { [K in SlideKind]: SlideDefinition<K> } = {
     kind: 'video',
     label: 'Video',
     blurb: 'An embedded or uploaded video.',
+    details:
+      'A video, either uploaded or embedded from a link, playing on the projector. Nobody answers it.',
     family: 'content',
     icon: 'Video',
     answerable: false,
@@ -659,6 +727,8 @@ export const SLIDE_REGISTRY: { [K in SlideKind]: SlideDefinition<K> } = {
     kind: 'instructions',
     label: 'How to Join',
     blurb: 'Shows the join code and QR code large.',
+    details:
+      'Shows the join code and QR code at full size, so the room can join without you reading the code aloud. Worth placing first, and again after a break when people have locked their phones.',
     family: 'content',
     icon: 'QrCode',
     answerable: false,
@@ -678,6 +748,8 @@ export const SLIDE_REGISTRY: { [K in SlideKind]: SlideDefinition<K> } = {
     kind: 'section_break',
     label: 'Section Break',
     blurb: 'A divider between parts of the session.',
+    details:
+      'A divider between parts of a session, so a long deck reads as sections rather than one run of slides. Nobody answers it.',
     family: 'content',
     icon: 'Minus',
     answerable: false,
@@ -691,6 +763,8 @@ export const SLIDE_REGISTRY: { [K in SlideKind]: SlideDefinition<K> } = {
     kind: 'embed',
     label: 'Embed',
     blurb: 'A web page, PowerPoint, Google Slides or Miro board.',
+    details:
+      'Puts another page inside the slide: a web page, a Google Slides deck, a PowerPoint, a Miro board. Use it to show existing material without rebuilding it here. Nobody answers it.',
     family: 'content',
     icon: 'ExternalLink',
     answerable: false,
@@ -704,6 +778,8 @@ export const SLIDE_REGISTRY: { [K in SlideKind]: SlideDefinition<K> } = {
     kind: 'compare',
     label: 'Compare',
     blurb: 'Two slides side by side, to show a before and after.',
+    details:
+      'Two slides shown side by side, for a before and after, or two results next to each other. You choose which two. Nobody answers it directly; what it shows comes from the slides it refers to.',
     family: 'content',
     icon: 'Columns2',
     answerable: false,

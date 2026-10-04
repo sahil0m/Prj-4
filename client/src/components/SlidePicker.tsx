@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { motion } from 'motion/react';
-import { Search, X } from 'lucide-react';
+import { Search, X, Info } from 'lucide-react';
 import {
   ALL_DEFINITIONS,
   SLIDE_FAMILIES,
@@ -10,6 +10,7 @@ import {
   type SlideFamily,
 } from '@pulse/shared';
 import { SlideIcon } from './SlideIcon';
+import { Hint } from './Controls';
 import styles from './SlidePicker.module.css';
 
 /**
@@ -126,22 +127,40 @@ export function SlidePicker({
                   <h3 className={styles.groupTitle}>{FAMILY_LABELS[group.family]}</h3>
                   <div className={styles.grid}>
                     {group.items.map((definition) => (
-                      <button
-                        key={definition.kind}
-                        type="button"
-                        className={styles.card}
-                        onClick={() => {
-                          choose(definition.kind);
-                        }}
-                      >
-                        <span className={styles.cardIcon} aria-hidden="true">
-                          <SlideIcon name={definition.icon} size={18} />
-                        </span>
-                        <span className={styles.cardText}>
-                          <span className={styles.cardLabel}>{definition.label}</span>
-                          <span className={styles.cardBlurb}>{definition.blurb}</span>
-                        </span>
-                      </button>
+                      // The information button cannot sit inside the card:
+                      // a button within a button is invalid, and clicking
+                      // it would add the slide. It is a sibling, laid over
+                      // the corner.
+                      <div key={definition.kind} className={styles.cardWrap}>
+                        <button
+                          type="button"
+                          className={styles.card}
+                          onClick={() => {
+                            choose(definition.kind);
+                          }}
+                        >
+                          <span className={styles.cardIcon} aria-hidden="true">
+                            <SlideIcon name={definition.icon} size={18} />
+                          </span>
+                          <span className={styles.cardText}>
+                            <span className={styles.cardLabel}>{definition.label}</span>
+                            <span className={styles.cardBlurb}>{definition.blurb}</span>
+                          </span>
+                        </button>
+
+                        <Hint text={definition.details}>
+                          <button
+                            type="button"
+                            className={styles.info}
+                            // It explains rather than acts, so it is not a
+                            // stop on the way to choosing a slide.
+                            tabIndex={-1}
+                            aria-label={`How ${definition.label} works`}
+                          >
+                            <Info size={14} aria-hidden="true" />
+                          </button>
+                        </Hint>
+                      </div>
                     ))}
                   </div>
                 </section>
