@@ -20,6 +20,7 @@ import {
   CheckCircle2,
   Check,
   Copy,
+  QrCode as QrCodeIcon,
 } from 'lucide-react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import {
@@ -100,6 +101,17 @@ export function Presenter() {
    * restarting anything.
    */
   const [chosenAddress, setChosenAddress] = useState<string | null>(null);
+
+  /*
+   * Whether the join panel is being held open.
+   *
+   * It shows itself while the room is empty and steps aside once answers
+   * arrive, which is right for the first minute and wrong for the rest of
+   * the session: someone always walks in late, and a code in the top bar
+   * is not something you can point a camera at. This is how a presenter
+   * brings it back.
+   */
+  const [showJoin, setShowJoin] = useState(false);
 
   const aiAvailable = useAiAvailable();
 
@@ -282,7 +294,7 @@ export function Presenter() {
       {/* Large while the room is empty, because that is when people need it;
           it steps aside once answers start arriving. */}
       <AnimatePresence>
-        {(state?.participantCount ?? 0) === 0 && (
+        {((state?.participantCount ?? 0) === 0 || showJoin) && (
           <motion.aside
             className={styles.joinPanel}
             initial={{ opacity: 0, scale: 0.96 }}
@@ -298,6 +310,18 @@ export function Presenter() {
             <p className={styles.joinPanelCode}>{formatCode(session.joinCode)}</p>
 
             <JoinAddressPicker addresses={session.joinUrls} value={address} onChange={setAddress} />
+
+            {showJoin && (
+              <button
+                type="button"
+                className={styles.joinPanelClose}
+                onClick={() => {
+                  setShowJoin(false);
+                }}
+              >
+                Hide
+              </button>
+            )}
           </motion.aside>
         )}
       </AnimatePresence>
@@ -486,6 +510,19 @@ export function Presenter() {
               setQuestionsOpen((current) => !current);
             }}
           />
+
+          <button
+            type="button"
+            className={styles.controlButton}
+            data-active={showJoin}
+            onClick={() => {
+              setShowJoin((current) => !current);
+            }}
+            title="Show the joining code and QR again"
+          >
+            <QrCodeIcon size={18} />
+            <span className={styles.controlLabel}>Join</span>
+          </button>
 
           <DropdownMenu.Root>
             <DropdownMenu.Trigger asChild>

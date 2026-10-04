@@ -177,14 +177,33 @@
   flex: none;
 }
 
+/*
+ * The chart, with its figures underneath.
+ *
+ * A column, not a row: the counts are a line below the result, and laid
+ * out horizontally they ended up beside the word cloud, reading as part
+ * of the answer rather than as a caption about it.
+ */
 .results {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(8px, 1.2vh, 18px);
+  width: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* The chart takes the room that is left; the figures take what they need. */
+.results > :first-child {
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   width: 100%;
   min-height: 0;
-  overflow: hidden;
 }
 
 .hidden {
@@ -672,7 +691,6 @@
   flex-wrap: wrap;
   justify-content: center;
   gap: clamp(10px, 1.4vw, 22px);
-  margin-top: clamp(10px, 1.6vh, 22px);
   font-size: clamp(12px, 1.1vw, 16px);
   color: var(--color-ink-subtle);
 }
@@ -720,4 +738,29 @@
   object-fit: contain;
   margin-left: auto;
   opacity: 0.9;
+}
+
+/* Dismisses the join panel when it is being held open deliberately. */
+.joinPanelClose {
+  margin-top: var(--space-xs);
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-ink-subtle);
+  background: color-mix(in srgb, var(--color-ink) 8%, transparent);
+  transition:
+    color var(--duration-fast) var(--ease-standard),
+    background var(--duration-fast) var(--ease-standard);
+}
+
+.joinPanelClose:hover {
+  color: var(--color-ink);
+  background: color-mix(in srgb, var(--color-ink) 14%, transparent);
+}
+
+/* A control that is currently doing something reads as switched on. */
+.controlButton[data-active='true'] {
+  color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 14%, transparent);
 }
