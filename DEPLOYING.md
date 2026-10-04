@@ -10,7 +10,7 @@ Everything below is free and nothing expires.
 | ------------- | ------------- | -------------------------------------- |
 | Presenter app | Vercel        | 100 GB bandwidth a month               |
 | Audience app  | Vercel        | same project allowance                 |
-| Server        | Koyeb         | one instance, always on, no card asked |
+| Server        | Render        | free instance, no card asked           |
 | PostgreSQL    | Neon          | 0.5 GB, scales to zero when idle       |
 | Images        | Cloudflare R2 | 10 GB, no charge for reading them back |
 
@@ -23,10 +23,14 @@ connections into rooms inside one process. None of that survives on a platform
 that discards the process. The two front ends are static files and deploy to
 Vercel perfectly; the server needs a host that leaves it running.
 
-Koyeb is used here rather than Render because Render's free tier stops the
-machine after fifteen minutes idle and takes about fifty seconds to wake. A
-hall waiting on that is worse than it sounds. Fly.io is comparable, but it
-holds new accounts until a card is added, which Koyeb does not.
+Render is used here because it asks for no card and is not going anywhere.
+Fly.io holds new accounts until a card is added. Koyeb was the better
+technical fit, having no idle timeout, but it is being absorbed into Mistral
+and its free tier is no longer something to build on.
+
+The cost is that Render stops a free instance after fifteen minutes without a
+request, and starting it again takes about fifty seconds. Open the URL a
+minute before a lecture and nobody in the room sees it.
 
 ---
 
@@ -51,60 +55,64 @@ bucket name, the access key id and the secret.
 This step is optional. Without it, images are stored in PostgreSQL, which
 works but will fill a 0.5 GB database after a few hundred slide photographs.
 
-## 3. The server, on Koyeb
+## 3. The server, on Render
 
-Sign in at [app.koyeb.com](https://app.koyeb.com) with GitHub, then **Create
-Web Service** and pick the `Prj-4` repository.
+Sign in at [render.com](https://render.com) with GitHub. No card is asked for.
 
-| Setting             | Value                                           |
-| ------------------- | ----------------------------------------------- |
-| Branch              | `main`                                          |
-| Builder             | **Dockerfile**                                  |
-| Dockerfile location | `Dockerfile`                                    |
-| Instance            | Free                                            |
-| Region              | Singapore, or whichever is nearest the database |
-| Port                | `8000`                                          |
-| Health check path   | `/health/ready`                                 |
+The repository carries a `render.yaml`, so the quickest route is **New →
+Blueprint**, pick `Prj-4`, and Render reads the settings from it. Otherwise
+**New → Web Service** and fill in:
 
-The builder matters. Koyeb offers Buildpack by default, which inspects the
-repository and guesses; this is a workspace of four packages and the guess is
-wrong. The Dockerfile builds the server alone and is what to use.
+| Setting           | Value                          |
+| ----------------- | ------------------------------ |
+| Repository        | `sahil0m/Prj-4`                |
+| Branch            | `main`                         |
+| Language          | **Docker**                     |
+| Dockerfile path   | `./Dockerfile`                 |
+| Instance type     | Free                           |
+| Region            | Singapore, beside the database |
+| Health check path | `/health/ready`                |
 
-Then add the environment variables. Mark the first three as **secret**, so the
-dashboard stops showing them back to you.
+Docker matters here. Render's other options inspect the repository and guess
+how to build it; this is a workspace of four packages and the guess is wrong.
+The Dockerfile builds the server alone.
+
+Then add the environment variables:
 
 | Variable                 | Value                                      |
 | ------------------------ | ------------------------------------------ |
 | `DATABASE_URL`           | the Neon string, without `channel_binding` |
-| `AUTH_SECRET`            | 48 random bytes, see below                 |
-| `PRESENTER_TOKEN_SECRET` | another 48 random bytes                    |
 | `NODE_ENV`               | `production`                               |
-| `PORT`                   | `8000`                                     |
 | `CROSS_SITE_COOKIES`     | `true`                                     |
+| `AUTH_SECRET`            | click **Generate**                         |
+| `PRESENTER_TOKEN_SECRET` | click **Generate**                         |
 
-Generate each secret with:
+Render's generated values are 64 characters, comfortably over the 32 the
+server requires. Leave `CLIENT_ORIGIN` and `JOIN_ORIGIN` until step 5, when
+the Vercel URLs exist.
+
+The first build takes several minutes: it compiles TypeScript and installs
+libvips for image processing. When it reports live:
 
 ```bash
-node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
+curl https://YOUR-APP.onrender.com/health/ready
 ```
 
-Leave `CLIENT_ORIGIN` and `JOIN_ORIGIN` for now; they are added in step 5 once
-the Vercel URLs exist. Deploy, and when it reports healthy:
+### The sleep
 
-```bash
-curl https://YOUR-APP.koyeb.app/health/ready
-```
-
-The first build takes a few minutes, since it compiles TypeScript and installs
-libvips for image processing.
+A free instance stops after fifteen minutes without a request. The next
+request starts it again, which takes about fifty seconds, and the browser
+simply waits. For a lecture this is a non-issue as long as the URL is opened
+beforehand. A free uptime pinger such as UptimeRobot, hitting `/health` every
+ten minutes, avoids it entirely.
 
 ### Keep it to one instance
 
-The scaling is pinned to one on purpose. Socket.IO rooms and the broadcast
-scheduling live in that process's memory, so a second instance would hold half
-the room and neither half would see the other's answers. Scaling out needs a
-shared adapter first; one instance already carried 1,500 simultaneous phones
-in testing, which is larger than any lecture hall.
+The instance count is pinned to one on purpose. Socket.IO rooms and the
+broadcast scheduling live in that process's memory, so a second instance
+would hold half the room and neither half would see the other's answers.
+Scaling out needs a shared adapter first; one instance already carried 1,500
+simultaneous phones in testing, which is larger than any lecture hall.
 
 ## 4. The front ends, on Vercel
 
@@ -112,19 +120,19 @@ Two projects from the same repository, differing only in root directory.
 
 **Presenter app**
 
-| Setting              | Value                                               |
-| -------------------- | --------------------------------------------------- |
-| Root Directory       | `client`                                            |
-| Framework Preset     | Vite                                                |
-| Environment variable | `VITE_SERVER_ORIGIN` = `https://YOUR-APP.koyeb.app` |
+| Setting              | Value                                                  |
+| -------------------- | ------------------------------------------------------ |
+| Root Directory       | `client`                                               |
+| Framework Preset     | Vite                                                   |
+| Environment variable | `VITE_SERVER_ORIGIN` = `https://YOUR-APP.onrender.com` |
 
 **Audience app**
 
-| Setting              | Value                                               |
-| -------------------- | --------------------------------------------------- |
-| Root Directory       | `join`                                              |
-| Framework Preset     | Vite                                                |
-| Environment variable | `VITE_SERVER_ORIGIN` = `https://YOUR-APP.koyeb.app` |
+| Setting              | Value                                                  |
+| -------------------- | ------------------------------------------------------ |
+| Root Directory       | `join`                                                 |
+| Framework Preset     | Vite                                                   |
+| Environment variable | `VITE_SERVER_ORIGIN` = `https://YOUR-APP.onrender.com` |
 
 Each directory has a `vercel.json` that builds from the repository root, which
 the workspace layout requires, and rewrites unknown paths to `index.html` so
@@ -135,13 +143,13 @@ redeploying.
 
 ## 5. Point the server back at them
 
-Once both Vercel URLs exist, add these to the Koyeb service and redeploy:
+Once both Vercel URLs exist, add these to the Render service, which redeploys itself:
 
 | Variable        | Value                            |
 | --------------- | -------------------------------- |
 | `CLIENT_ORIGIN` | `https://YOUR-CLIENT.vercel.app` |
 | `JOIN_ORIGIN`   | `https://YOUR-JOIN.vercel.app`   |
-| `SERVER_ORIGIN` | `https://YOUR-APP.koyeb.app`     |
+| `SERVER_ORIGIN` | `https://YOUR-APP.onrender.com`  |
 
 The server refuses browser origins it does not recognise, so this is what
 makes the two front ends able to call it at all.

@@ -1,0 +1,62 @@
+# The server, on Render.
+#
+# Render reads this file when the repository is connected as a Blueprint,
+# which saves filling the same settings in by hand. The database is not
+# declared here: it lives on Neon, whose free tier does not expire, where
+# Render's own free database is deleted after thirty days.
+#
+# The free instance is stopped after fifteen minutes without a request
+# and takes about fifty seconds to start again. That is the cost of not
+# needing a card. Open the URL a minute before a lecture and the room
+# never sees it.
+
+services:
+  - type: web
+    name: pulse-server
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: singapore # beside the database
+    branch: main
+
+    # Render's load balancer waits for this before sending traffic, and
+    # uses it to decide the instance is still alive.
+    healthCheckPath: /health/ready
+
+    # One instance, and only one. Socket.IO rooms and the broadcast
+    # scheduling live in that process's memory, so a second instance
+    # would hold half the room and neither half would see the other's
+    # answers. Raising this needs a shared adapter first; one instance
+    # already carried 1,500 simultaneous phones in testing.
+    numInstances: 1
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      # Render routes to whatever the service listens on and sets PORT
+      # itself; the server reads it.
+      - key: PORT
+        value: 10000
+
+      # The clients are served from another domain, so every API call is
+      # cross-site and the sign-in cookie has to be marked as such.
+      - key: CROSS_SITE_COOKIES
+        value: 'true'
+
+      # Entered in the dashboard rather than committed here.
+      - key: DATABASE_URL
+        sync: false
+      - key: CLIENT_ORIGIN
+        sync: false
+      - key: JOIN_ORIGIN
+        sync: false
+      - key: SERVER_ORIGIN
+        sync: false
+
+      # Generated once by Render and kept across deploys, so nobody has
+      # to produce them by hand and they never appear in the repository.
+      - key: AUTH_SECRET
+        generateValue: true
+      - key: PRESENTER_TOKEN_SECRET
+        generateValue: true
