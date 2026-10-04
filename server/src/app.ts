@@ -13,6 +13,7 @@ import { authRoutes } from './routes/auth.js';
 import { deckRoutes } from './routes/decks.js';
 import { sessionRoutes } from './routes/sessions.js';
 import { aiRoutes } from './routes/ai.js';
+import { imageRoutes } from './routes/images.js';
 import { adminRoutes } from './routes/admin.js';
 
 /**
@@ -126,6 +127,7 @@ export function createApp(): Express {
   app.use('/api/decks', deckRoutes());
   app.use('/api/sessions', sessionRoutes());
   app.use('/api/ai', aiRoutes());
+  app.use('/api/images', imageRoutes());
   app.use('/api/admin', adminRoutes());
 
   /* ---------------- 404 ---------------- */

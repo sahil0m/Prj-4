@@ -252,6 +252,13 @@ export function Presenter() {
           <span className={styles.joinCodeBox}>{formatCode(session.joinCode)}</span>
         </div>
 
+        {/* The deck's own mark, which was stored and never shown. Quiet
+            and in the corner: it belongs to the room's host, not to the
+            question being asked. */}
+        {typeof deckTheme?.logoUrl === 'string' && deckTheme.logoUrl !== '' && (
+          <img className={styles.logo} src={deckTheme.logoUrl} alt="" />
+        )}
+
         <div className={styles.topRight}>
           {!connected && (
             <span className={styles.offline}>

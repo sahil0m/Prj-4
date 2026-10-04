@@ -12,6 +12,7 @@ import {
   uniqueIndex,
   primaryKey,
   check,
+  customType,
 } from 'drizzle-orm/pg-core';
 
 /**
@@ -40,6 +41,9 @@ import {
  */
 
 const id = (name = 'id') => varchar(name, { length: 24 });
+
+/** Raw bytes, for the images held in the database. */
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => 'bytea' });
 
 const createdAt = () => timestamp('created_at', { withTimezone: true }).notNull().defaultNow();
 /** Set on insert, and refreshed by every update made through Drizzle. */
@@ -289,6 +293,58 @@ export const decks = pgTable(
 );
 
 /* ------------------------------------------------------------------ */
+/* Images                                                              */
+/* ------------------------------------------------------------------ */
+
+/**
+ * An image someone uploaded, held in the database.
+ *
+ * Kept here rather than on disk so there is one thing to back up and
+ * nothing to lose when the server moves. Every upload is resized and
+ * re-encoded before it arrives, so these are tens of kilobytes rather
+ * than the several megabytes a phone camera produces.
+ *
+ * Served from /api/images/<id> without authentication: the audience has
+ * no account, and an image on a slide is shown to the whole room anyway.
+ * The id is random, so one cannot be found by guessing.
+ */
+export const images = pgTable(
+  'images',
+  {
+    id: id().primaryKey(),
+
+    /** Who uploaded it, so their images go when their account does. */
+    ownerId: id('owner_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+
+    mime: varchar('mime', { length: 60 }).notNull(),
+    width: integer('width').notNull(),
+    height: integer('height').notNull(),
+    bytes: integer('bytes').notNull(),
+    data: bytea('data').notNull(),
+
+    /**
+     * A small copy, for where the image is shown small.
+     *
+     * A choice option is fifty-odd pixels on a phone, and four of them at
+     * full size is megabytes to render thumbnails. Stored once at upload
+     * rather than resized on every request.
+     */
+    thumb: bytea('thumb').notNull(),
+    thumbBytes: integer('thumb_bytes').notNull(),
+
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('images_owner_idx').on(t.ownerId, t.createdAt.desc()),
+    // The cleanup job sweeps uploads nothing ever referenced.
+    index('images_created_at_idx').on(t.createdAt),
+    check('images_mime_check', sql`${t.mime} IN ('image/webp', 'image/png', 'image/jpeg')`),
+  ],
+);
+
+/* ------------------------------------------------------------------ */
 /* Sessions                                                            */
 /* ------------------------------------------------------------------ */
 
@@ -525,3 +581,4 @@ export type Session = typeof sessions.$inferSelect;
 export type Participant = typeof participants.$inferSelect;
 export type Response = typeof responses.$inferSelect;
 export type AudienceQuestion = typeof audienceQuestions.$inferSelect;
+export type Image = typeof images.$inferSelect;

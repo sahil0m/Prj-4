@@ -706,3 +706,18 @@
   color: var(--color-positive);
   background: color-mix(in srgb, var(--color-positive) 15%, transparent);
 }
+
+/*
+ * The deck's logo in the top bar.
+ *
+ * Height-limited rather than boxed, so a wide wordmark and a square badge
+ * both sit correctly without being stretched.
+ */
+.logo {
+  max-height: clamp(22px, 2.4vh, 34px);
+  max-width: clamp(90px, 12vw, 190px);
+  width: auto;
+  object-fit: contain;
+  margin-left: auto;
+  opacity: 0.9;
+}

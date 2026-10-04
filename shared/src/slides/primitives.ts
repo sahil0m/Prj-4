@@ -10,10 +10,22 @@ export const zLocalId = z.string().min(1).max(64);
  * both of which are script-execution vectors when rendered. We allow only
  * http and https.
  */
+/**
+ * An image this server stores and serves, as its address.
+ *
+ * Uploads live in the database and are served from /api/images/<id>, so
+ * the address is relative -- it has to keep working whether the room
+ * reaches the server on localhost, on a laptop's Wi-Fi address or behind
+ * a real hostname, and an absolute URL baked in at upload time would not.
+ */
+const UPLOADED_IMAGE = /^\/api\/images\/[0-9a-f]{24}$/;
+
 export const zSafeUrl = z
   .string()
   .max(2000)
   .superRefine((value, ctx) => {
+    if (UPLOADED_IMAGE.test(value)) return;
+
     let parsed: URL;
     try {
       parsed = new URL(value);

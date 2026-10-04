@@ -17,6 +17,7 @@
     "decks:verify": "tsx src/scripts/verify-decks.ts",
     "realtime:verify": "tsx src/scripts/verify-realtime.ts",
     "session:verify": "tsx src/scripts/verify-session.ts",
+    "images:verify": "tsx src/scripts/verify-images.ts",
     "admin:grant": "tsx src/scripts/make-admin.ts",
     "cleanup:verify": "tsx src/scripts/verify-cleanup.ts",
     "where": "tsx src/scripts/where.ts"
@@ -39,6 +40,7 @@
     "pg": "^8.23.0",
     "pino": "^9.6.0",
     "pino-pretty": "^13.0.0",
+    "sharp": "^0.35.5",
     "socket.io": "^4.8.1",
     "zod": "^3.24.1"
   },

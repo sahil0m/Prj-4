@@ -331,6 +331,51 @@ export const api = {
   slideResults: (sessionId: string, slideId: string): Promise<{ results: SlideResults }> =>
     request(`/sessions/${sessionId}/slides/${slideId}/results`),
 
+  /* ---------------- images ---------------- */
+
+  /**
+   * Uploads a picture and returns where it now lives.
+   *
+   * Sent as a form rather than JSON: a base64 image in a JSON body is a
+   * third larger and has to be held in memory twice on the way.
+   */
+  uploadImage: async (
+    file: File,
+  ): Promise<{ url: string; width: number; height: number; bytes: number }> => {
+    const form = new FormData();
+    form.append('image', file);
+
+    const send = () =>
+      fetch(`${BASE}/images`, {
+        method: 'POST',
+        body: form,
+        credentials: 'include',
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+      });
+
+    let response = await send();
+
+    // The same one transparent refresh the JSON requests get.
+    if (response.status === 401) {
+      const refreshed = await attemptRefresh();
+      if (refreshed) response = await send();
+    }
+
+    const text = await response.text();
+    const parsed: unknown = text ? JSON.parse(text) : null;
+
+    if (!response.ok) {
+      const shape = (parsed ?? {}) as { error?: string; code?: string };
+      throw new ApiError(
+        response.status,
+        shape.error ?? 'That image could not be uploaded.',
+        shape.code ?? 'upload_failed',
+      );
+    }
+
+    return parsed as { url: string; width: number; height: number; bytes: number };
+  },
+
   /* ---------------- ai ---------------- */
 
   aiStatus: (): Promise<{ available: boolean; providers: string[] }> => request('/ai/status'),

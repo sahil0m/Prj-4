@@ -78,6 +78,15 @@ export function Results({
 /* Bars                                                                */
 /* ------------------------------------------------------------------ */
 
+/**
+ * The small copy of an uploaded image.
+ *
+ * Only ours have one; an address someone pasted is left exactly as given.
+ */
+function thumbOf(url: string): string {
+  return /^\/api\/images\/[0-9a-f]{24}$/.test(url) ? `${url}?size=thumb` : url;
+}
+
 function Bars({ items, total, reveal }: { items: CountedItem[]; total: number; reveal: boolean }) {
   // Scaled to the leader rather than to 100%, so a close race still fills
   // the screen and small differences stay visible from the back of a room.
@@ -98,7 +107,7 @@ function Bars({ items, total, reveal }: { items: CountedItem[]; total: number; r
                 them -- a chart of text alone leaves nobody able to tell
                 which bar was which. */}
             {item.imageUrl !== undefined && item.imageUrl !== '' && (
-              <img className={styles.barImage} src={item.imageUrl} alt="" loading="lazy" />
+              <img className={styles.barImage} src={thumbOf(item.imageUrl)} alt="" loading="lazy" />
             )}
 
             <span className={styles.barKey}>{String.fromCharCode(65 + i)}</span>

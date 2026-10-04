@@ -1,4 +1,4 @@
-import { and, count, eq, inArray, isNotNull, lt, or } from 'drizzle-orm';
+import { and, count, eq, inArray, isNotNull, lt, or, sql } from 'drizzle-orm';
 import { db } from '../lib/db.js';
 import {
   decks,
@@ -7,6 +7,7 @@ import {
   responses,
   audienceQuestions,
   refreshTokens,
+  images,
 } from '../db/schema.js';
 import { logger } from '../lib/logger.js';
 
@@ -40,6 +41,7 @@ const RESPONSE_RETENTION_DAYS = 365;
 
 export interface CleanupReport {
   decksPurged: number;
+  imagesPurged: number;
   responsesPurged: number;
   participantsPurged: number;
   questionsPurged: number;
@@ -58,6 +60,7 @@ export async function runCleanup(): Promise<CleanupReport> {
 
   const report: CleanupReport = {
     decksPurged: 0,
+    imagesPurged: 0,
     responsesPurged: 0,
     participantsPurged: 0,
     questionsPurged: 0,
@@ -151,6 +154,45 @@ export async function runCleanup(): Promise<CleanupReport> {
 
   report.tokensPurged = purgedTokens.length;
 
+  /* ---------------- uploads nothing uses ---------------- */
+
+  /*
+   * An image uploaded and then abandoned.
+   *
+   * Someone adds a picture to a slide, changes their mind, and the bytes
+   * stay in the database with nothing pointing at them. Without this the
+   * table grows with every discarded attempt and never shrinks.
+   *
+   * An image is in use if its address appears anywhere in a deck's slides
+   * or in a session's frozen snapshot -- the snapshot matters, because a
+   * past session must keep showing the pictures the room actually saw,
+   * even after the deck moved on. Only uploads older than a day are
+   * considered, so one being placed right now is never swept out from
+   * under the person placing it.
+   */
+  const orphanCutoff = new Date(now - DAY_MS);
+
+  const orphans = await db.execute<{ id: string }>(sql`
+    SELECT i.id FROM images i
+    WHERE i.created_at < ${orphanCutoff}
+      AND NOT EXISTS (
+        SELECT 1 FROM decks d
+        WHERE d.slides::text LIKE '%' || i.id || '%'
+           OR d.theme::text LIKE '%' || i.id || '%'
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM sessions s WHERE s.deck_snapshot::text LIKE '%' || i.id || '%'
+      )
+  `);
+
+  const orphanIds = orphans.rows.map((row) => row.id);
+
+  if (orphanIds.length > 0) {
+    await db.delete(images).where(inArray(images.id, orphanIds));
+  }
+
+  report.imagesPurged = orphanIds.length;
+
   /* ---------------- sessions nobody closed ---------------- */
 
   /*
@@ -176,6 +218,7 @@ export async function runCleanup(): Promise<CleanupReport> {
 
   const total =
     report.decksPurged +
+    report.imagesPurged +
     report.responsesPurged +
     report.participantsPurged +
     report.questionsPurged +

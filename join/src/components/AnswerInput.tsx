@@ -103,6 +103,15 @@ export function AnswerInput(props: AnswerInputProps) {
 /* Choice                                                              */
 /* ------------------------------------------------------------------ */
 
+/**
+ * The small copy of an uploaded image.
+ *
+ * Only ours have one; an address someone pasted is left exactly as given.
+ */
+function thumbOf(url: string): string {
+  return /^\/api\/images\/[0-9a-f]{24}$/.test(url) ? `${url}?size=thumb` : url;
+}
+
 function ChoiceInput({
   kind,
   config,
@@ -157,7 +166,7 @@ function ChoiceInput({
             {option.imageUrl !== undefined && option.imageUrl !== '' && (
               <img
                 className={styles.optionImage}
-                src={option.imageUrl}
+                src={thumbOf(option.imageUrl)}
                 alt=""
                 loading="lazy"
                 draggable={false}

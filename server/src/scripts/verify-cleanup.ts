@@ -254,7 +254,8 @@ async function main(): Promise<void> {
       second.participantsPurged +
       second.questionsPurged +
       second.tokensPurged +
-      second.staleSessionsClosed;
+      second.staleSessionsClosed +
+      second.imagesPurged;
 
     assert(total === 0, `a second run still removed ${String(total)} rows`);
   });

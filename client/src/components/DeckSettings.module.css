@@ -244,3 +244,18 @@
     transform: rotate(360deg);
   }
 }
+
+/* The deck's logo, under the theme swatches it belongs with. */
+.logo {
+  display: grid;
+  gap: 6px;
+  margin-top: var(--space-md);
+}
+
+.logoLabel {
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--color-ink-subtle);
+}

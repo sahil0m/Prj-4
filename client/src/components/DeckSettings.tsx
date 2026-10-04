@@ -4,6 +4,7 @@ import { X, Palette, Users, Shield, Copy, Trash2, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, ApiError, type Deck } from '../lib/api';
 import { Toggle, Choice, InfoHint } from './Controls';
+import { ImageField } from './ImageField';
 import styles from './DeckSettings.module.css';
 
 /**
@@ -75,7 +76,22 @@ export function DeckSettings({
                     className={styles.theme}
                     data-active={theme.preset === option.value}
                     onClick={() => {
-                      onSave({ theme: { preset: option.value, accent: option.accent } });
+                      /*
+                       * The background travels with the preset.
+                       *
+                       * Only the accent used to be saved, so choosing
+                       * Ember gave an orange accent on the default
+                       * midnight canvas -- the swatch in this very list
+                       * showed a theme the deck never got.
+                       */
+                      onSave({
+                        theme: {
+                          preset: option.value,
+                          accent: option.accent,
+                          background: option.canvas,
+                          mode: 'dark',
+                        },
+                      });
                     }}
                   >
                     <span
@@ -88,6 +104,17 @@ export function DeckSettings({
                     <span className={styles.themeLabel}>{option.label}</span>
                   </button>
                 ))}
+              </div>
+
+              <div className={styles.logo}>
+                <span className={styles.logoLabel}>Logo</span>
+                <ImageField
+                  label="Logo"
+                  value={typeof theme.logoUrl === 'string' ? theme.logoUrl : ''}
+                  onChange={(logoUrl) => {
+                    onSave({ theme: { logoUrl } });
+                  }}
+                />
               </div>
             </section>
 

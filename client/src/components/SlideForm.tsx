@@ -8,6 +8,7 @@ import {
   type SlideKind,
 } from '@pulse/shared';
 import { Toggle, Range, Choice } from './Controls';
+import { ImageField } from './ImageField';
 import styles from './SlideForm.module.css';
 
 /** A slide as the picker needs to know it. */
@@ -282,13 +283,22 @@ function Field({
         />
       )}
 
-      {(field.kind === 'text' || field.kind === 'url') && (
+      {field.kind === 'url' && (
+        <ImageField
+          label={field.label}
+          value={typeof value === 'string' ? value : ''}
+          onChange={(url) => {
+            onChange({ [field.name]: url });
+          }}
+        />
+      )}
+
+      {field.kind === 'text' && (
         <input
           id={id}
-          type={field.kind === 'url' ? 'url' : 'text'}
+          type="text"
           className={styles.input}
           value={typeof value === 'string' ? value : ''}
-          placeholder={field.kind === 'url' ? 'https://…' : undefined}
           onChange={(e) => {
             onChange({ [field.name]: e.target.value });
           }}
@@ -511,13 +521,25 @@ function ListCell({
     );
   }
 
+  if (column.kind === 'url') {
+    // An image on a choice: the author has the file, not an address for it.
+    return (
+      <ImageField
+        label={column.label}
+        value={typeof value === 'string' ? value : ''}
+        onChange={onChange}
+        compact
+      />
+    );
+  }
+
   return (
     <input
-      className={column.kind === 'url' ? styles.optionUrl : styles.optionInput}
-      type={column.kind === 'url' ? 'url' : 'text'}
+      className={styles.optionInput}
+      type="text"
       value={typeof value === 'string' ? value : ''}
       maxLength={column.max}
-      placeholder={column.kind === 'url' ? 'https://… (optional)' : column.label}
+      placeholder={column.label}
       aria-label={column.label}
       onChange={(event) => {
         onChange(event.target.value);
