@@ -20,3 +20,7 @@ coverage/
 .claude/
 .cursor/
 .aider*
+
+# The project report and its sources; kept off the public repository.
+report/
+Prj_3_Final_report_Sehatsaathi.docx
