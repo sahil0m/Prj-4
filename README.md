@@ -146,7 +146,7 @@ npm run verify
 
 Pulse is meant to run on a laptop in the room, which needs none of this. To
 host it instead, see [DEPLOYING.md](DEPLOYING.md): the two front ends go to
-Vercel, the server to Fly.io, PostgreSQL to Neon and images to Cloudflare R2.
+Vercel, the server to Koyeb, PostgreSQL to Neon and images to Cloudflare R2.
 All free, nothing expires.
 
 The server cannot run on Vercel. It holds a WebSocket open for every phone

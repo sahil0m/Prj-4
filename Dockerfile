@@ -58,6 +58,9 @@ COPY --from=build --chown=node:node /app/server/node_modules server/node_modules
 # The migrations are read at startup, so they ship with the image.
 COPY --from=build --chown=node:node /app/server/drizzle server/drizzle/
 
+# The port is read from the environment at run time; this is only the
+# default for a plain `docker run`. Koyeb sets PORT=8000, and the server
+# listens on whatever it is given.
 EXPOSE 4000
 
 CMD ["node", "server/dist/index.js"]

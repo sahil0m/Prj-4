@@ -10,7 +10,7 @@ Everything below is free and nothing expires.
 | ------------- | ------------- | -------------------------------------- |
 | Presenter app | Vercel        | 100 GB bandwidth a month               |
 | Audience app  | Vercel        | same project allowance                 |
-| Server        | Fly.io        | one small machine, always on           |
+| Server        | Koyeb         | one instance, always on, no card asked |
 | PostgreSQL    | Neon          | 0.5 GB, scales to zero when idle       |
 | Images        | Cloudflare R2 | 10 GB, no charge for reading them back |
 
@@ -23,9 +23,10 @@ connections into rooms inside one process. None of that survives on a platform
 that discards the process. The two front ends are static files and deploy to
 Vercel perfectly; the server needs a host that leaves it running.
 
-Fly.io is used here rather than Render because Render's free tier stops the
+Koyeb is used here rather than Render because Render's free tier stops the
 machine after fifteen minutes idle and takes about fifty seconds to wake. A
-hall waiting on that is worse than it sounds.
+hall waiting on that is worse than it sounds. Fly.io is comparable, but it
+holds new accounts until a card is added, which Koyeb does not.
 
 ---
 
@@ -50,51 +51,60 @@ bucket name, the access key id and the secret.
 This step is optional. Without it, images are stored in PostgreSQL, which
 works but will fill a 0.5 GB database after a few hundred slide photographs.
 
-## 3. The server, on Fly
+## 3. The server, on Koyeb
 
-Install [flyctl](https://fly.io/docs/flyctl/install/), then from the
-repository root:
+Sign in at [app.koyeb.com](https://app.koyeb.com) with GitHub, then **Create
+Web Service** and pick the `Prj-4` repository.
+
+| Setting             | Value                                           |
+| ------------------- | ----------------------------------------------- |
+| Branch              | `main`                                          |
+| Builder             | **Dockerfile**                                  |
+| Dockerfile location | `Dockerfile`                                    |
+| Instance            | Free                                            |
+| Region              | Singapore, or whichever is nearest the database |
+| Port                | `8000`                                          |
+| Health check path   | `/health/ready`                                 |
+
+The builder matters. Koyeb offers Buildpack by default, which inspects the
+repository and guesses; this is a workspace of four packages and the guess is
+wrong. The Dockerfile builds the server alone and is what to use.
+
+Then add the environment variables. Mark the first three as **secret**, so the
+dashboard stops showing them back to you.
+
+| Variable                 | Value                                      |
+| ------------------------ | ------------------------------------------ |
+| `DATABASE_URL`           | the Neon string, without `channel_binding` |
+| `AUTH_SECRET`            | 48 random bytes, see below                 |
+| `PRESENTER_TOKEN_SECRET` | another 48 random bytes                    |
+| `NODE_ENV`               | `production`                               |
+| `PORT`                   | `8000`                                     |
+| `CROSS_SITE_COOKIES`     | `true`                                     |
+
+Generate each secret with:
 
 ```bash
-fly launch --no-deploy
+node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
 ```
 
-Answer no when it offers to create a database — Neon is already handling that.
-Edit `app` in `fly.toml` to whatever name it registered, then set the secrets:
+Leave `CLIENT_ORIGIN` and `JOIN_ORIGIN` for now; they are added in step 5 once
+the Vercel URLs exist. Deploy, and when it reports healthy:
 
 ```bash
-fly secrets set \
-  DATABASE_URL="postgresql://...neon.tech/neondb?sslmode=require" \
-  AUTH_SECRET="$(node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))")" \
-  PRESENTER_TOKEN_SECRET="$(node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))")" \
-  CLIENT_ORIGIN="https://YOUR-CLIENT.vercel.app" \
-  JOIN_ORIGIN="https://YOUR-JOIN.vercel.app" \
-  SERVER_ORIGIN="https://YOUR-APP.fly.dev" \
-  R2_ACCOUNT_ID="..." R2_BUCKET="..." \
-  R2_ACCESS_KEY_ID="..." R2_SECRET_ACCESS_KEY="..."
+curl https://YOUR-APP.koyeb.app/health/ready
 ```
 
-The two Vercel URLs do not exist yet. Deploy the front ends first if you
-prefer, or set these again afterwards — `fly secrets set` restarts the machine
-with the new values.
+The first build takes a few minutes, since it compiles TypeScript and installs
+libvips for image processing.
 
-```bash
-fly deploy
-```
+### Keep it to one instance
 
-Check it came up:
-
-```bash
-curl https://YOUR-APP.fly.dev/health/ready
-```
-
-### Keep it to one machine
-
-`fly.toml` pins the count to one deliberately. Socket.IO rooms and the
-broadcast scheduling live in that process's memory, so a second machine would
-hold half the room and neither half would see the other's answers. Scaling out
-needs a shared adapter first; one machine already carried 1,500 simultaneous
-phones in testing, which is larger than any lecture hall.
+The scaling is pinned to one on purpose. Socket.IO rooms and the broadcast
+scheduling live in that process's memory, so a second instance would hold half
+the room and neither half would see the other's answers. Scaling out needs a
+shared adapter first; one instance already carried 1,500 simultaneous phones
+in testing, which is larger than any lecture hall.
 
 ## 4. The front ends, on Vercel
 
@@ -102,19 +112,19 @@ Two projects from the same repository, differing only in root directory.
 
 **Presenter app**
 
-| Setting              | Value                                             |
-| -------------------- | ------------------------------------------------- |
-| Root Directory       | `client`                                          |
-| Framework Preset     | Vite                                              |
-| Environment variable | `VITE_SERVER_ORIGIN` = `https://YOUR-APP.fly.dev` |
+| Setting              | Value                                               |
+| -------------------- | --------------------------------------------------- |
+| Root Directory       | `client`                                            |
+| Framework Preset     | Vite                                                |
+| Environment variable | `VITE_SERVER_ORIGIN` = `https://YOUR-APP.koyeb.app` |
 
 **Audience app**
 
-| Setting              | Value                                             |
-| -------------------- | ------------------------------------------------- |
-| Root Directory       | `join`                                            |
-| Framework Preset     | Vite                                              |
-| Environment variable | `VITE_SERVER_ORIGIN` = `https://YOUR-APP.fly.dev` |
+| Setting              | Value                                               |
+| -------------------- | --------------------------------------------------- |
+| Root Directory       | `join`                                              |
+| Framework Preset     | Vite                                                |
+| Environment variable | `VITE_SERVER_ORIGIN` = `https://YOUR-APP.koyeb.app` |
 
 Each directory has a `vercel.json` that builds from the repository root, which
 the workspace layout requires, and rewrites unknown paths to `index.html` so
@@ -125,13 +135,13 @@ redeploying.
 
 ## 5. Point the server back at them
 
-Once both Vercel URLs exist:
+Once both Vercel URLs exist, add these to the Koyeb service and redeploy:
 
-```bash
-fly secrets set \
-  CLIENT_ORIGIN="https://YOUR-CLIENT.vercel.app" \
-  JOIN_ORIGIN="https://YOUR-JOIN.vercel.app"
-```
+| Variable        | Value                            |
+| --------------- | -------------------------------- |
+| `CLIENT_ORIGIN` | `https://YOUR-CLIENT.vercel.app` |
+| `JOIN_ORIGIN`   | `https://YOUR-JOIN.vercel.app`   |
+| `SERVER_ORIGIN` | `https://YOUR-APP.koyeb.app`     |
 
 The server refuses browser origins it does not recognise, so this is what
 makes the two front ends able to call it at all.
@@ -153,8 +163,8 @@ than at a laptop address, which is the point of hosting it.
 
 If the phone connects and immediately disconnects, `CLIENT_ORIGIN` or
 `JOIN_ORIGIN` does not match the URL actually being used. If signing in works
-but you are signed out on every refresh, `CROSS_SITE_COOKIES` is not set —
-`fly.toml` sets it, so check the deploy picked it up.
+but you are signed out on every refresh, `CROSS_SITE_COOKIES` is not set on
+the service.
 
 ## Costs
 
